@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      background: #f0f2f5;
+    }
+    header {
+      background: white;
+      padding: 1rem 2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.2rem; color: #1a1a1a; margin: 0; }
+    header nav { display: flex; gap: 1rem; align-items: center; }
+    header nav a, header nav button {
+      color: #667781; text-decoration: none; font-size: 0.85rem;
+      background: none; border: none; cursor: pointer;
+    }
+    header nav a:hover, header nav button:hover { text-decoration: underline; }
+    .content { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .user-info {
+      background: white;
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .user-info .details { color: #1a1a1a; }
+    .user-info .details span { color: #667781; font-size: 0.85rem; margin-left: 0.75rem; }
+    .disconnect { color: #e74c3c; font-size: 0.85rem; cursor: pointer; text-decoration: none; background: none; border: none; }
+    .disconnect:hover { text-decoration: underline; }
+    .placeholder { text-align: center; padding: 3rem; color: #667781; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>WhatsApp Group Monitor</h1>
+    <nav>
+      <form method="POST" action="/logout" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
+        <button type="submit">Log out {{ADMIN_USERNAME}}</button>
+      </form>
+    </nav>
+  </header>
+  <div class="content">
+    <div class="user-info">
+      <div class="details" id="user-info">Loading...</div>
+      <button class="disconnect" onclick="disconnect()">Disconnect</button>
+    </div>
+    <div class="placeholder">Coming soon</div>
+  </div>
+  <script>
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        const data = await res.json();
+        if (data.state !== 'open') {
+          window.location.href = '/';
+          return;
+        }
+        const el = document.getElementById('user-info');
+        const name = data.user?.name || 'Unknown';
+        const phone = data.user?.phone ? '+' + data.user.phone : '';
+        el.innerHTML = name + (phone ? '<span>' + phone + '</span>' : '');
+      } catch (e) {
+        document.getElementById('user-info').textContent = 'Error loading status';
+      }
+    }
+
+    async function disconnect() {
+      if (!confirm('Disconnect this device from WhatsApp?')) return;
+      const csrf = document.querySelector('meta[name="csrf-token"]').content;
+      await fetch('/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: '_csrf=' + encodeURIComponent(csrf),
+        redirect: 'manual',
+      });
+      // Wait for connection state to change before reloading
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        try {
+          const res = await fetch('/api/status');
+          const data = await res.json();
+          if (data.state !== 'open') break;
+        } catch { break; }
+      }
+      window.location.reload();
+    }
+
+    loadStatus();
+  </script>
+</body>
+</html>

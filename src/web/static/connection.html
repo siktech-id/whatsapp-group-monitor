@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect WhatsApp</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #f0f2f5;
+    }
+    .container {
+      text-align: center;
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { color: #1a1a1a; font-size: 1.5rem; }
+    #status { color: #667781; margin: 1rem 0; }
+    #qr-img { margin: 1rem 0; }
+    .waiting { color: #667781; }
+    .reconnecting { color: #e67e22; }
+    .error { color: #e74c3c; }
+    .nav { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee; }
+    .nav button { background: none; border: none; color: #667781; font-size: 0.8rem; cursor: pointer; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Connect WhatsApp</h1>
+    <p id="status" class="waiting">Loading...</p>
+    <div id="qr-img"></div>
+    <div class="nav">
+      <form method="POST" action="/logout" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
+        <button type="submit">Log out {{ADMIN_USERNAME}}</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    const statusEl = document.getElementById('status');
+    const qrEl = document.getElementById('qr-img');
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/status');
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        const data = await res.json();
+
+        qrEl.innerHTML = '';
+
+        if (data.state === 'open') {
+          window.location.href = '/';
+          return;
+        } else if (data.qr) {
+          statusEl.textContent = 'Scan this QR code with WhatsApp';
+          statusEl.className = 'waiting';
+          qrEl.innerHTML = '<img src="' + data.qr + '" alt="QR Code" />';
+        } else if (data.state === 'close') {
+          statusEl.textContent = 'Reconnecting...';
+          statusEl.className = 'reconnecting';
+        } else {
+          statusEl.textContent = 'Connecting...';
+          statusEl.className = 'waiting';
+        }
+      } catch (e) {
+        statusEl.textContent = 'Error connecting to server';
+        statusEl.className = 'error';
+      }
+    }
+
+    poll();
+    setInterval(poll, 2000);
+  </script>
+</body>
+</html>

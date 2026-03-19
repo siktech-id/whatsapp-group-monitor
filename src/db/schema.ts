@@ -61,11 +61,10 @@ export const activityEventTypes = [
 ] as const
 export type ActivityEventType = typeof activityEventTypes[number]
 
-export const activityLog = sqliteTable('activity_log', {
+export const groupActivityLog = sqliteTable('group_activity_log', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  groupJid: text('group_jid'),
+  groupJid: text('group_jid').notNull(),
   userJid: text('user_jid').notNull(),
-  toUserJid: text('to_user_jid'),
   messageId: text('message_id').notNull(),
   parentId: text('parent_id'),
   eventType: text('event_type', { enum: activityEventTypes }).notNull(),

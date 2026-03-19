@@ -77,11 +77,10 @@ export function initAccountDb(phone: string) {
 
     CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_jid);
 
-    CREATE TABLE IF NOT EXISTS activity_log (
+    CREATE TABLE IF NOT EXISTS group_activity_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      group_jid TEXT,
+      group_jid TEXT NOT NULL,
       user_jid TEXT NOT NULL,
-      to_user_jid TEXT,
       message_id TEXT NOT NULL,
       parent_id TEXT,
       event_type TEXT NOT NULL,
@@ -91,11 +90,10 @@ export function initAccountDb(phone: string) {
       created_at INTEGER NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_activity_group_ts ON activity_log(group_jid, timestamp);
-    CREATE INDEX IF NOT EXISTS idx_activity_user_group ON activity_log(user_jid, group_jid);
-    CREATE INDEX IF NOT EXISTS idx_activity_message ON activity_log(message_id);
-    CREATE INDEX IF NOT EXISTS idx_activity_parent ON activity_log(parent_id);
-    CREATE INDEX IF NOT EXISTS idx_activity_to_user ON activity_log(to_user_jid);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_group_message ON group_activity_log(group_jid, message_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_group_ts ON group_activity_log(group_jid, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_activity_user_group ON group_activity_log(user_jid, group_jid);
+    CREATE INDEX IF NOT EXISTS idx_activity_parent ON group_activity_log(parent_id);
   `)
 
   currentPhone = phone

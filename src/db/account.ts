@@ -49,6 +49,7 @@ export function initAccountDb(phone: string) {
       bot_membership TEXT NOT NULL DEFAULT 'none',
       bot_functions INTEGER NOT NULL DEFAULT 0,
       is_archived INTEGER NOT NULL DEFAULT 0,
+      syncing INTEGER,
       synced_at INTEGER,
       created_at INTEGER NOT NULL
     );
@@ -86,6 +87,7 @@ export function initAccountDb(phone: string) {
       event_type TEXT NOT NULL,
       metadata TEXT,
       raw TEXT,
+      processed INTEGER NOT NULL DEFAULT 0,
       timestamp INTEGER NOT NULL,
       created_at INTEGER NOT NULL
     );

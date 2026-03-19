@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #f0f2f5;
+    }
+    .container {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      width: 400px;
+    }
+    h1 { color: #1a1a1a; font-size: 1.5rem; margin-bottom: 1.5rem; }
+    label { display: block; color: #667781; font-size: 0.85rem; margin-bottom: 0.25rem; }
+    input {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+      box-sizing: border-box;
+      margin-bottom: 1rem;
+    }
+    input:focus { border-color: #25d366; }
+    button {
+      padding: 0.6rem 1.5rem;
+      background: #25d366;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button:hover { background: #1da851; }
+    .msg { font-size: 0.85rem; margin-top: 0.75rem; }
+    .msg-ok { color: #25d366; }
+    .msg-err { color: #e74c3c; }
+    .nav { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee; display: flex; justify-content: space-between; }
+    .nav a { color: #667781; font-size: 0.8rem; text-decoration: none; }
+    .nav a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Settings</h1>
+    <form id="form" onsubmit="save(event)">
+      <label for="project_name">Project name</label>
+      <input type="text" id="project_name" name="project_name" />
+
+      <label for="page_size">Items per page</label>
+      <input type="number" id="page_size" name="page_size" min="10" max="500" />
+
+      <button type="submit">Save</button>
+      <p class="msg" id="msg"></p>
+    </form>
+    <div class="nav">
+      <a href="/">&larr; Back</a>
+    </div>
+  </div>
+  <script>
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+
+    async function load() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        document.getElementById('project_name').value = data.project_name || '';
+        document.getElementById('page_size').value = data.page_size || '50';
+      } catch (e) {
+        showMsg('Failed to load settings', false);
+      }
+    }
+
+    async function save(e) {
+      e.preventDefault();
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+          body: JSON.stringify({
+            project_name: document.getElementById('project_name').value,
+            page_size: document.getElementById('page_size').value,
+          }),
+        });
+        if (res.ok) showMsg('Settings saved', true);
+        else showMsg('Failed to save', false);
+      } catch (e) {
+        showMsg('Failed to save', false);
+      }
+    }
+
+    function showMsg(text, ok) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+      setTimeout(() => { el.textContent = ''; }, 3000);
+    }
+
+    load();
+  </script>
+</body>
+</html>

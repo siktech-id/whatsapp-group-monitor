@@ -1,6 +1,7 @@
 import { mkdirSync } from 'fs'
 import { config } from './config.js'
 import { logger } from './utils/logger.js'
+import { initSharedDb } from './db/shared.js'
 import { startConnection } from './whatsapp/client.js'
 import { startWebServer } from './web/server.js'
 
@@ -9,6 +10,7 @@ async function main() {
 
   logger.info('Starting WhatsApp Group Monitor...')
 
+  initSharedDb()
   await startWebServer()
   await startConnection()
 }

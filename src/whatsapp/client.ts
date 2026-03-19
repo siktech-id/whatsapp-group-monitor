@@ -12,6 +12,7 @@ import { LRUCache } from 'lru-cache'
 import { initAuthState } from './auth.js'
 import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
+import { getSettingOrDefault } from '../db/queries/settings.js'
 import { setupEventHandlers } from './events.js'
 
 let sock: WASocket | null = null
@@ -45,7 +46,7 @@ export async function startConnection(): Promise<void> {
 
   sock = makeWASocket({
     version,
-    browser: ['WhatsApp Group Monitor', 'Chrome', '22.0'], // TODO: use project_name from settings table
+    browser: [getSettingOrDefault('project_name', 'WhatsApp Group Monitor'), 'Chrome', '22.0'],
     logger: logger.child({ module: 'baileys' }),
     auth: {
       creds: state.creds,

@@ -46,8 +46,9 @@
 </head>
 <body>
   <header>
-    <h1>WhatsApp Group Monitor</h1>
+    <h1>{{PROJECT_NAME}}</h1>
     <nav>
+      <a href="/settings">Settings</a>
       <form method="POST" action="/logout" style="display:inline">
         <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
         <button type="submit">Log out {{ADMIN_USERNAME}}</button>

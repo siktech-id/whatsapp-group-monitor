@@ -1,5 +1,6 @@
 import type { ConnectionState, Contact } from 'baileys'
 import { logger } from '../../utils/logger.js'
+import { initAccountDb, closeAccountDb } from '../../db/account.js'
 
 let currentQr: string | null = null
 let connectionState: string | null = null
@@ -22,9 +23,13 @@ export function handleConnectionUpdate(update: Partial<ConnectionState>, user?: 
       const phone = user?.id?.split(':')[0].split('@')[0] || null
       const name = user?.name || user?.notify || null
       botUser = { name, phone }
+      if (phone) {
+        initAccountDb(phone)
+      }
       logger.info({ phone }, 'WhatsApp connection established')
     } else if (update.connection === 'close') {
       botUser = null
+      closeAccountDb()
     }
   }
 }

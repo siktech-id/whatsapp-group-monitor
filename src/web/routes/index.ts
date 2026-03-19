@@ -5,6 +5,7 @@ import { sendPage } from '../server.js'
 import { getCurrentQr, getConnectionState, getBotUser } from '../../whatsapp/handlers/connection.js'
 import { getSock } from '../../whatsapp/client.js'
 import { requireAuth, requireAuthApi, generateCsrf, verifyCsrf } from '../middleware/auth.js'
+import { getSettingOrDefault, setSetting } from '../../db/queries/settings.js'
 
 export function registerRoutes(app: FastifyInstance) {
   // --- Public: login ---
@@ -64,6 +65,33 @@ export function registerRoutes(app: FastifyInstance) {
       // not connected
     }
     return reply.redirect('/')
+  })
+
+  // --- Protected: settings ---
+  app.get('/settings', { preHandler: requireAuth }, async (req, reply) => {
+    generateCsrf(req)
+    return sendPage(reply, 'settings.html', req)
+  })
+
+  app.get('/api/settings', { preHandler: requireAuthApi }, async (_req, reply) => {
+    return reply.send({
+      project_name: getSettingOrDefault('project_name', 'WhatsApp Group Monitor'),
+      page_size: getSettingOrDefault('page_size', '50'),
+    })
+  })
+
+  app.post('/api/settings', { preHandler: requireAuthApi }, async (req, reply) => {
+    if (!verifyCsrf(req)) {
+      return reply.status(403).send({ error: 'Invalid CSRF token' })
+    }
+    const body = req.body as Record<string, string>
+    const allowed = ['project_name', 'page_size']
+    for (const key of allowed) {
+      if (key in body && typeof body[key] === 'string') {
+        setSetting(key, body[key])
+      }
+    }
+    return reply.send({ ok: true })
   })
 
   // --- Protected API ---

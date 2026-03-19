@@ -34,10 +34,11 @@
 </head>
 <body>
   <div class="container">
-    <h1>Connect WhatsApp</h1>
+    <h1>{{PROJECT_NAME}}</h1>
     <p id="status" class="waiting">Loading...</p>
     <div id="qr-img"></div>
-    <div class="nav">
+    <div class="nav" style="display: flex; justify-content: center; gap: 1.5rem;">
+      <a href="/settings" style="color:#667781; font-size:0.8rem; text-decoration:none;">Settings</a>
       <form method="POST" action="/logout" style="display:inline">
         <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
         <button type="submit">Log out {{ADMIN_USERNAME}}</button>

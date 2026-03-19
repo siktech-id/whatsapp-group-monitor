@@ -6,6 +6,9 @@ import { getCurrentQr, getConnectionState, getBotUser } from '../../whatsapp/han
 import { getSock } from '../../whatsapp/client.js'
 import { requireAuth, requireAuthApi, generateCsrf, verifyCsrf } from '../middleware/auth.js'
 import { getSettingOrDefault, setSetting } from '../../db/queries/settings.js'
+import { getAllGroups } from '../../db/queries/groups.js'
+import { getGroupMemberCounts } from '../../db/queries/members.js'
+import { isAccountDbReady } from '../../db/account.js'
 
 export function registerRoutes(app: FastifyInstance) {
   // --- Public: login ---
@@ -95,6 +98,21 @@ export function registerRoutes(app: FastifyInstance) {
   })
 
   // --- Protected API ---
+  app.get('/api/groups', { preHandler: requireAuthApi }, async (_req, reply) => {
+    if (!isAccountDbReady()) {
+      return reply.send({ groups: [] })
+    }
+    const groups = getAllGroups()
+    const jids = groups.map(g => g.jid)
+    const memberCounts = getGroupMemberCounts(jids)
+
+    const enriched = groups.map(g => ({
+      ...g,
+      memberCount: memberCounts.get(g.jid) ?? 0,
+    }))
+    return reply.send({ groups: enriched })
+  })
+
   app.get('/api/status', { preHandler: requireAuthApi }, async (_req, reply) => {
     const qr = getCurrentQr()
     const state = getConnectionState()

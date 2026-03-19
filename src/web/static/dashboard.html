@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard</title>
+  <title>{{PROJECT_NAME}}</title>
   <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
   <style>
     body {
@@ -41,7 +41,34 @@
     .user-info .details span { color: #667781; font-size: 0.85rem; margin-left: 0.75rem; }
     .disconnect { color: #e74c3c; font-size: 0.85rem; cursor: pointer; text-decoration: none; background: none; border: none; }
     .disconnect:hover { text-decoration: underline; }
-    .placeholder { text-align: center; padding: 3rem; color: #667781; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    th, td { padding: 0.75rem 1rem; text-align: left; }
+    th { background: #f8f9fa; color: #667781; font-weight: 600; font-size: 0.85rem; }
+    td { border-top: 1px solid #eee; color: #1a1a1a; font-size: 0.9rem; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    th.num { text-align: right; }
+    .badge {
+      display: inline-block;
+      padding: 0 0.4rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      vertical-align: baseline;
+    }
+    .badge-community { background: #e8f5e9; color: #2e7d32; }
+    .badge-none { background: #fce4ec; color: #c62828; }
+    .badge-participant { background: #e3f2fd; color: #1565c0; }
+    .badge-admin { background: #fff3e0; color: #e65100; }
+    .badge-superadmin { background: #f3e5f5; color: #7b1fa2; }
+    .indent { padding-left: 2.5rem; }
+    .loading { text-align: center; padding: 2rem; color: #667781; }
   </style>
 </head>
 <body>
@@ -60,7 +87,8 @@
       <div class="details" id="user-info">Loading...</div>
       <button class="disconnect" onclick="disconnect()">Disconnect</button>
     </div>
-    <div class="placeholder">Coming soon</div>
+    <h2 style="font-size: 1.1rem; color: #1a1a1a;">Groups</h2>
+    <div id="groups"><p class="loading">Loading...</p></div>
   </div>
   <script>
     async function loadStatus() {
@@ -68,16 +96,61 @@
         const res = await fetch('/api/status');
         if (res.status === 401) { window.location.href = '/login'; return; }
         const data = await res.json();
-        if (data.state !== 'open') {
-          window.location.href = '/';
-          return;
-        }
+        if (data.state !== 'open') { window.location.href = '/'; return; }
         const el = document.getElementById('user-info');
         const name = data.user?.name || 'Unknown';
         const phone = data.user?.phone ? '+' + data.user.phone : '';
         el.innerHTML = name + (phone ? '<span>' + phone + '</span>' : '');
       } catch (e) {
         document.getElementById('user-info').textContent = 'Error loading status';
+      }
+    }
+
+    async function loadGroups() {
+      try {
+        const res = await fetch('/api/groups');
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        const data = await res.json();
+        const groups = data.groups || [];
+        if (groups.length === 0) {
+          document.getElementById('groups').innerHTML = '<p class="loading">No groups found</p>';
+          return;
+        }
+
+        const communities = groups.filter(g => g.isCommunity);
+        const childMap = {};
+        for (const g of groups) {
+          if (g.parentCommunityJid) {
+            if (!childMap[g.parentCommunityJid]) childMap[g.parentCommunityJid] = [];
+            childMap[g.parentCommunityJid].push(g);
+          }
+        }
+        const standalone = groups.filter(g => !g.isCommunity && !g.parentCommunityJid);
+
+        let html = '<table><thead><tr><th>Name</th><th class="num">Members</th><th>Bot role</th></tr></thead><tbody>';
+
+        function addRow(g, indent) {
+          const name = (indent ? '<span class="indent">' : '') + escHtml(g.name)
+            + (g.isCommunity ? ' <span class="badge badge-community">community</span>' : '')
+            + (indent ? '</span>' : '');
+          const role = '<span class="badge badge-' + g.botMembership + '">' + g.botMembership + '</span>';
+          html += '<tr><td>' + name + '</td><td class="num">' + (g.memberCount || 0) + '</td><td>' + role + '</td></tr>';
+        }
+
+        for (const c of communities) {
+          addRow(c, false);
+          for (const child of (childMap[c.jid] || [])) {
+            addRow(child, true);
+          }
+        }
+        for (const g of standalone) {
+          addRow(g, false);
+        }
+
+        html += '</tbody></table>';
+        document.getElementById('groups').innerHTML = html;
+      } catch (e) {
+        document.getElementById('groups').innerHTML = '<p class="loading">Failed to load groups</p>';
       }
     }
 
@@ -90,7 +163,6 @@
         body: '_csrf=' + encodeURIComponent(csrf),
         redirect: 'manual',
       });
-      // Wait for connection state to change before reloading
       for (let i = 0; i < 10; i++) {
         await new Promise(r => setTimeout(r, 500));
         try {
@@ -102,7 +174,14 @@
       window.location.reload();
     }
 
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
     loadStatus();
+    loadGroups();
   </script>
 </body>
 </html>

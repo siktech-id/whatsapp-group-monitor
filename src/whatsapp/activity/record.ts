@@ -4,7 +4,7 @@ import type { WAMessage } from 'baileys'
 import type { ActivityEventType, GroupActivityRow } from '../../db/schema.js'
 import { insertActivity } from '../../db/queries/activity.js'
 import { processRecord } from './processor.js'
-import { getSock, getCachedMessage } from '../client.js'
+import { getSock, getEncryptionContext } from '../client.js'
 
 /** Convert a value to a JSON-safe object (replace binary, bigint) */
 function safeJson(obj: unknown): unknown {
@@ -159,12 +159,14 @@ export class ActivityRecord {
       || msg.message?.pollCreationMessageV2
       || msg.message?.pollCreationMessageV3
     if (pollMsg) {
+      const secret = msg.message?.messageContextInfo?.messageSecret
       return new ActivityRecord({
         groupJid, userJid, messageId, timestamp, raw,
         eventType: 'poll_create',
         metadata: {
           question: pollMsg.name || '',
           options: (pollMsg.options || []).map(o => o.optionName || ''),
+          ...(secret ? { encKey: Buffer.from(secret).toString('base64') } : {}),
         },
       })
     }
@@ -173,13 +175,13 @@ export class ActivityRecord {
     const pollUpdate = msg.message?.pollUpdateMessage
     if (pollUpdate) {
       const pollMsgId = pollUpdate.pollCreationMessageKey?.id
+      let decrypted = false
       let selectedOptions: string[] = []
 
       if (pollMsgId && pollUpdate.vote) {
         try {
-          const pollCreationMsg = getCachedMessage(pollMsgId)
-          const pollEncKey = pollCreationMsg?.message?.messageContextInfo?.messageSecret
-          if (pollEncKey && pollUpdate.pollCreationMessageKey) {
+          const ctx = getEncryptionContext(groupJid, pollMsgId)
+          if (ctx && pollUpdate.pollCreationMessageKey) {
             const sock = getSock()
             const meId = jidNormalizedUser(sock.user?.id || '')
             const meLid = sock.user?.lid ? jidNormalizedUser(sock.user.lid) : meId
@@ -192,30 +194,26 @@ export class ActivityRecord {
               ? (msg.key.fromMe ? meLid : (msg.key.participant || getKeyAuthor(msg.key, meId)))
               : getKeyAuthor(msg.key, meId)
 
-            const decrypted = decryptPollVote(pollUpdate.vote, {
-              pollEncKey,
+            const result = decryptPollVote(pollUpdate.vote, {
+              pollEncKey: ctx.encKey,
               pollCreatorJid,
               pollMsgId,
               voterJid,
             })
 
-            const pollMsg = pollCreationMsg?.message?.pollCreationMessage
-              || pollCreationMsg?.message?.pollCreationMessageV2
-              || pollCreationMsg?.message?.pollCreationMessageV3
             const optionHashes = new Map<string, string>()
-            for (const opt of pollMsg?.options || []) {
-              if (opt.optionName) {
-                const hash = createHash('sha256').update(opt.optionName).digest('hex')
-                optionHashes.set(hash, opt.optionName)
-              }
+            for (const optName of ctx.options || []) {
+              const hash = createHash('sha256').update(optName).digest('hex')
+              optionHashes.set(hash, optName)
             }
-            selectedOptions = (decrypted.selectedOptions || []).map(hash => {
+            selectedOptions = (result.selectedOptions || []).map(hash => {
               const hex = Buffer.from(hash).toString('hex')
               return optionHashes.get(hex) || hex
             })
+            decrypted = true
           }
         } catch {
-          // decryption failed — log without options
+          // decryption failed
         }
       }
 
@@ -223,13 +221,14 @@ export class ActivityRecord {
         groupJid, userJid, messageId, timestamp, raw,
         parentId: pollMsgId || null,
         eventType: 'poll_vote',
-        metadata: selectedOptions.length > 0 ? { selectedOptions } : null,
+        metadata: decrypted ? { selectedOptions } : { encrypted: true },
       })
     }
 
     // Event creation
     const eventMsg = msg.message?.eventMessage
     if (eventMsg) {
+      const secret = msg.message?.messageContextInfo?.messageSecret
       return new ActivityRecord({
         groupJid, userJid, messageId, timestamp, raw,
         eventType: 'event_create',
@@ -238,6 +237,7 @@ export class ActivityRecord {
           description: eventMsg.description || null,
           startTime: Number(eventMsg.startTime || 0) || null,
           isCanceled: eventMsg.isCanceled || false,
+          ...(secret ? { encKey: Buffer.from(secret).toString('base64') } : {}),
         },
       })
     }
@@ -261,9 +261,9 @@ export class ActivityRecord {
 
       if (eventMsgId && encEventResp.encPayload && encEventResp.encIv) {
         try {
-          const eventCreationMsg = getCachedMessage(eventMsgId)
-          const eventEncKey = eventCreationMsg?.message?.messageContextInfo?.messageSecret
-          if (eventEncKey && encEventResp.eventCreationMessageKey) {
+          const ctx = getEncryptionContext(groupJid, eventMsgId)
+          if (ctx && encEventResp.eventCreationMessageKey) {
+            const eventEncKey = ctx.encKey
             const sock = getSock()
             const meId = jidNormalizedUser(sock.user?.id || '')
             const meLid = sock.user?.lid ? jidNormalizedUser(sock.user.lid) : meId

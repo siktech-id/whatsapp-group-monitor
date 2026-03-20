@@ -15,6 +15,8 @@ import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import { getSettingOrDefault } from '../db/queries/settings.js'
 import { setupEventHandlers } from './events.js'
+import { getCreationRecord } from '../db/queries/activity.js'
+import { isAccountDbReady } from '../db/account.js'
 
 let sock: WASocket | null = null
 
@@ -34,8 +36,48 @@ export function getCachedMessage(id: string): WAMessage | undefined {
   return msgCache.get(id)
 }
 
+/**
+ * Get encryption context (encKey + options) for a poll/event creation message.
+ * Checks LRU cache first, falls back to DB.
+ */
+export function getEncryptionContext(groupJid: string, messageId: string): { encKey: Uint8Array; options?: string[] } | null {
+  // Try cache first
+  const cached = msgCache.get(messageId)
+  if (cached) {
+    const secret = cached.message?.messageContextInfo?.messageSecret
+    if (secret) {
+      const pollMsg = cached.message?.pollCreationMessage
+        || cached.message?.pollCreationMessageV2
+        || cached.message?.pollCreationMessageV3
+      return {
+        encKey: secret,
+        options: pollMsg ? (pollMsg.options || []).map(o => o.optionName || '') : undefined,
+      }
+    }
+  }
+
+  // Fall back to DB
+  if (isAccountDbReady()) {
+    try {
+      const row = getCreationRecord(groupJid, messageId)
+      if (row?.metadata) {
+        const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata
+        if (meta.encKey) {
+          return {
+            encKey: Buffer.from(meta.encKey, 'base64'),
+            options: meta.options,
+          }
+        }
+      }
+    } catch {
+      // query failed
+    }
+  }
+
+  return null
+}
+
 async function getMessage(key: WAMessageKey) {
-  logger.debug({ key }, 'Fetching message for key')
   if (key.id) return msgCache.get(key.id)?.message ?? undefined
   return undefined
 }

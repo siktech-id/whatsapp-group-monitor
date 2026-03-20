@@ -25,6 +25,18 @@ export function insertActivity(record: ActivityRecord): boolean {
   }
 }
 
+/** Get a creation record (poll_create or event_create) by message ID */
+export function getCreationRecord(groupJid: string, messageId: string) {
+  const db = getAccountDb()
+  return db.select()
+    .from(groupActivityLog)
+    .where(and(
+      eq(groupActivityLog.groupJid, groupJid),
+      eq(groupActivityLog.messageId, messageId),
+    ))
+    .get()
+}
+
 /** Count activity events per group since a given timestamp */
 export function getGroupActivityCounts(groupJids: string[], sinceTimestamp: number): Map<string, number> {
   const result = new Map<string, number>()

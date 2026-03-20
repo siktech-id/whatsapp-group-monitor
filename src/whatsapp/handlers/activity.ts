@@ -14,7 +14,10 @@ export function handleMessagesUpsert(event: BaileysEventMap['messages.upsert']) 
     const groupJid = msg.key.remoteJid
     if (!groupJid || !groupJid.endsWith('@g.us')) continue
 
-    cacheMessage(msg)
+    // Cache messages that have messageSecret (polls, events) for later decryption
+    if (msg.message?.messageContextInfo?.messageSecret) {
+      cacheMessage(msg)
+    }
 
     const record = ActivityRecord.fromMessage(msg, groupJid)
     if (!record) continue

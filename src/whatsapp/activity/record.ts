@@ -1,4 +1,4 @@
-import { getContentType, proto, jidNormalizedUser, decryptPollVote, getKeyAuthor } from 'baileys'
+import { getContentType, proto, jidNormalizedUser, decryptPollVote, decryptEventResponse, getKeyAuthor } from 'baileys'
 import { createHash } from 'crypto'
 import type { WAMessage } from 'baileys'
 import type { ActivityEventType, GroupActivityRow } from '../../db/schema.js'
@@ -256,11 +256,46 @@ export class ActivityRecord {
     // Encrypted event response
     const encEventResp = msg.message?.encEventResponseMessage
     if (encEventResp) {
+      const eventMsgId = encEventResp.eventCreationMessageKey?.id
+      let responseStr: string | null = null
+
+      if (eventMsgId && encEventResp.encPayload && encEventResp.encIv) {
+        try {
+          const eventCreationMsg = getCachedMessage(eventMsgId)
+          const eventEncKey = eventCreationMsg?.message?.messageContextInfo?.messageSecret
+          if (eventEncKey && encEventResp.eventCreationMessageKey) {
+            const sock = getSock()
+            const meId = jidNormalizedUser(sock.user?.id || '')
+            const meLid = sock.user?.lid ? jidNormalizedUser(sock.user.lid) : meId
+            const isLid = msg.key.addressingMode === 'lid'
+
+            const creatorKey = encEventResp.eventCreationMessageKey.participant || encEventResp.eventCreationMessageKey.remoteJid || ''
+            const eventCreatorJid = isLid
+              ? (encEventResp.eventCreationMessageKey.fromMe ? meLid : creatorKey)
+              : getKeyAuthor(encEventResp.eventCreationMessageKey, meId)
+            const responderJid = isLid
+              ? (msg.key.fromMe ? meLid : (msg.key.participant || getKeyAuthor(msg.key, meId)))
+              : getKeyAuthor(msg.key, meId)
+
+            const decoded = decryptEventResponse(encEventResp, {
+              eventEncKey,
+              eventCreatorJid,
+              eventMsgId,
+              responderJid,
+            })
+            const r = decoded.response
+            responseStr = r === 1 ? 'GOING' : r === 2 ? 'NOT_GOING' : r === 3 ? 'MAYBE' : String(r ?? 'UNKNOWN')
+          }
+        } catch {
+          // decryption failed
+        }
+      }
+
       return new ActivityRecord({
         groupJid, userJid, messageId, timestamp, raw,
-        parentId: encEventResp.eventCreationMessageKey?.id || null,
+        parentId: eventMsgId || null,
         eventType: 'event_response',
-        metadata: { encrypted: true },
+        metadata: responseStr ? { response: responseStr } : { encrypted: true },
       })
     }
 

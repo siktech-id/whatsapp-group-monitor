@@ -2,7 +2,6 @@ import type { WASocket } from 'baileys'
 import { logger } from '../../utils/logger.js'
 import { upsertGroupFromMetadata, markAbsentGroupsAsNone } from '../../db/queries/groups.js'
 import { syncGroupParticipants } from '../../db/queries/members.js'
-import { setAllActiveGroupsSyncing } from '../../db/queries/activity.js'
 
 export async function syncGroups(sock: WASocket) {
   const botJid = sock.user?.id
@@ -23,8 +22,7 @@ export async function syncGroups(sock: WASocket) {
     }
 
     markAbsentGroupsAsNone(activeJids)
-    setAllActiveGroupsSyncing()
-    logger.info({ count: groupList.length }, 'Group sync complete, waiting for history')
+    logger.info({ count: groupList.length }, 'Group sync complete')
   } catch (err) {
     logger.error({ err }, 'Failed to sync groups')
   }

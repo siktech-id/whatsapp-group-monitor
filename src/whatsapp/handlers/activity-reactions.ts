@@ -1,7 +1,6 @@
 import { type BaileysEventMap, jidNormalizedUser } from 'baileys'
 import { logger } from '../../utils/logger.js'
 import { isAccountDbReady } from '../../db/account.js'
-import { isGroupSyncing } from '../../db/queries/activity.js'
 import { ActivityRecord } from '../activity/record.js'
 
 export function handleMessagesReaction(reactions: BaileysEventMap['messages.reaction']) {
@@ -19,8 +18,7 @@ export function handleMessagesReaction(reactions: BaileysEventMap['messages.reac
     const record = ActivityRecord.fromReaction(key, reaction, reactorJid)
     if (!record) continue
 
-    const syncing = isGroupSyncing(groupJid)
-    record.saveAndProcess(!syncing)
+    record.saveAndProcess()
 
     logger.debug({ groupJid, messageId: record.messageId, emoji: reaction.text }, 'Reaction logged')
   }

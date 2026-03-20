@@ -49,8 +49,6 @@ export function initAccountDb(phone: string) {
       bot_membership TEXT NOT NULL DEFAULT 'none',
       bot_functions INTEGER NOT NULL DEFAULT 0,
       is_archived INTEGER NOT NULL DEFAULT 0,
-      syncing INTEGER,
-      synced_at INTEGER,
       created_at INTEGER NOT NULL
     );
 
@@ -87,7 +85,6 @@ export function initAccountDb(phone: string) {
       event_type TEXT NOT NULL,
       metadata TEXT,
       raw TEXT,
-      processed INTEGER NOT NULL DEFAULT 0,
       timestamp INTEGER NOT NULL,
       created_at INTEGER NOT NULL
     );
@@ -97,6 +94,21 @@ export function initAccountDb(phone: string) {
     CREATE INDEX IF NOT EXISTS idx_activity_user_group ON group_activity_log(user_jid, group_jid);
     CREATE INDEX IF NOT EXISTS idx_activity_parent ON group_activity_log(parent_id);
   `)
+
+  // Migrations: drop columns that are no longer needed
+  // SQLite doesn't support DROP COLUMN before 3.35.0, so we use a safe approach
+  const columns = sqlite.pragma('table_info(groups)') as { name: string }[]
+  const groupCols = columns.map(c => c.name)
+  if (groupCols.includes('syncing')) {
+    sqlite.exec('ALTER TABLE groups DROP COLUMN syncing')
+  }
+  if (groupCols.includes('synced_at')) {
+    sqlite.exec('ALTER TABLE groups DROP COLUMN synced_at')
+  }
+  const actCols = (sqlite.pragma('table_info(group_activity_log)') as { name: string }[]).map(c => c.name)
+  if (actCols.includes('processed')) {
+    sqlite.exec('ALTER TABLE group_activity_log DROP COLUMN processed')
+  }
 
   currentPhone = phone
   logger.info({ phone, path: dbPath }, 'Account database initialized')

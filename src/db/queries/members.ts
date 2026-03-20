@@ -64,6 +64,27 @@ export function syncGroupParticipants(groupJid: string, participants: GroupParti
   })
 }
 
+export function getGroupMembers(groupJid: string, opts?: { includeLeft?: boolean }) {
+  const db = getAccountDb()
+  const conditions = [eq(groupMembers.groupJid, groupJid)]
+  if (!opts?.includeLeft) {
+    conditions.push(notInArray(groupMembers.membership, ['none']))
+  }
+  return db.select({
+    userJid: groupMembers.userJid,
+    membership: groupMembers.membership,
+    joinedAt: groupMembers.joinedAt,
+    leftAt: groupMembers.leftAt,
+    displayName: users.displayName,
+    phoneNumber: users.phoneNumber,
+    isBanned: users.isBanned,
+  })
+    .from(groupMembers)
+    .innerJoin(users, eq(groupMembers.userJid, users.jid))
+    .where(and(...conditions))
+    .all()
+}
+
 export function getGroupMemberCounts(groupJids: string[]): Map<string, number> {
   const result = new Map<string, number>()
   if (groupJids.length === 0) return result

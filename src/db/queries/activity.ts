@@ -1,10 +1,10 @@
-import { eq, and, asc, desc, ne, sql } from 'drizzle-orm'
+import { eq, and, desc, sql, gte, inArray } from 'drizzle-orm'
 import { getAccountDb } from '../account.js'
-import { groupActivityLog, groups } from '../schema.js'
+import { groupActivityLog } from '../schema.js'
 import type { ActivityRecord } from '../../whatsapp/activity/record.js'
 
 /** Insert activity record. Returns true if inserted, false if duplicate. */
-export function insertActivity(record: ActivityRecord, processed: -1 | 0 | 1): boolean {
+export function insertActivity(record: ActivityRecord): boolean {
   const db = getAccountDb()
   try {
     db.insert(groupActivityLog).values({
@@ -15,98 +15,72 @@ export function insertActivity(record: ActivityRecord, processed: -1 | 0 | 1): b
       eventType: record.eventType,
       metadata: record.metadata,
       raw: record.raw,
-      processed,
       timestamp: record.timestamp,
       createdAt: new Date(),
     }).run()
     return true
   } catch (err: any) {
-    // Unique constraint violation = duplicate
     if (err?.code === 'SQLITE_CONSTRAINT_UNIQUE') return false
     throw err
   }
 }
 
-export function hasActivityForGroup(groupJid: string): boolean {
+/** Count activity events per group since a given timestamp */
+export function getGroupActivityCounts(groupJids: string[], sinceTimestamp: number): Map<string, number> {
+  const result = new Map<string, number>()
+  if (groupJids.length === 0) return result
   const db = getAccountDb()
-  const row = db.select({ id: groupActivityLog.id })
+  const rows = db.select({
+    groupJid: groupActivityLog.groupJid,
+    cnt: sql<number>`count(*)`.as('cnt'),
+  })
     .from(groupActivityLog)
-    .where(eq(groupActivityLog.groupJid, groupJid))
-    .limit(1)
-    .get()
-  return !!row
+    .where(and(
+      inArray(groupActivityLog.groupJid, groupJids),
+      gte(groupActivityLog.timestamp, sinceTimestamp),
+    ))
+    .groupBy(groupActivityLog.groupJid)
+    .all()
+  for (const row of rows) result.set(row.groupJid, row.cnt)
+  return result
 }
 
-export function getNewestActivity(groupJid: string) {
+/** Get most recent activity timestamp per group */
+export function getGroupLastActivity(groupJids: string[]): Map<string, number> {
+  const result = new Map<string, number>()
+  if (groupJids.length === 0) return result
   const db = getAccountDb()
-  return db.select()
+  const rows = db.select({
+    groupJid: groupActivityLog.groupJid,
+    lastTs: sql<number>`max(timestamp)`.as('last_ts'),
+  })
     .from(groupActivityLog)
-    .where(eq(groupActivityLog.groupJid, groupJid))
-    .orderBy(desc(groupActivityLog.timestamp))
-    .limit(1)
-    .get()
+    .where(inArray(groupActivityLog.groupJid, groupJids))
+    .groupBy(groupActivityLog.groupJid)
+    .all()
+  for (const row of rows) {
+    if (row.lastTs) result.set(row.groupJid, row.lastTs)
+  }
+  return result
 }
 
-export function getOldestActivity(groupJid: string) {
+/** Per-user activity breakdown for a group in the last N days */
+export function getGroupUserActivity(groupJid: string, sinceDays: number) {
   const db = getAccountDb()
-  return db.select()
-    .from(groupActivityLog)
-    .where(eq(groupActivityLog.groupJid, groupJid))
-    .orderBy(asc(groupActivityLog.timestamp))
-    .limit(1)
-    .get()
-}
-
-export function getPendingActivities(groupJid: string) {
-  const db = getAccountDb()
-  return db.select()
+  const sinceTs = Math.floor(Date.now() / 1000) - (sinceDays * 86400)
+  return db.select({
+    userJid: groupActivityLog.userJid,
+    total: sql<number>`count(*)`.as('total'),
+    posts: sql<number>`sum(case when event_type in ('message', 'poll_create', 'event_create') then 1 else 0 end)`.as('posts'),
+    reactions: sql<number>`sum(case when event_type in ('reaction', 'poll_vote', 'event_response') then 1 else 0 end)`.as('reactions'),
+    lastActivity: sql<number>`max(timestamp)`.as('last_activity'),
+  })
     .from(groupActivityLog)
     .where(and(
       eq(groupActivityLog.groupJid, groupJid),
-      eq(groupActivityLog.processed, 0),
+      gte(groupActivityLog.timestamp, sinceTs),
     ))
-    .orderBy(asc(groupActivityLog.timestamp))
+    .groupBy(groupActivityLog.userJid)
+    .orderBy(desc(sql`total`))
     .all()
-}
-
-export function markProcessed(id: number) {
-  const db = getAccountDb()
-  return db.update(groupActivityLog)
-    .set({ processed: 1 })
-    .where(eq(groupActivityLog.id, id))
-    .run()
-}
-
-export function updateGroupSyncing(groupJid: string, syncing: number | null) {
-  const db = getAccountDb()
-  return db.update(groups)
-    .set({ syncing })
-    .where(eq(groups.jid, groupJid))
-    .run()
-}
-
-export function setAllActiveGroupsSyncing() {
-  const db = getAccountDb()
-  return db.update(groups)
-    .set({ syncing: 1 })
-    .where(ne(groups.botMembership, 'none'))
-    .run()
-}
-
-export function getSyncingGroups() {
-  const db = getAccountDb()
-  return db.select({ jid: groups.jid })
-    .from(groups)
-    .where(eq(groups.syncing, 1))
-    .all()
-    .map(r => r.jid)
-}
-
-export function isGroupSyncing(groupJid: string): boolean {
-  const db = getAccountDb()
-  const row = db.select({ syncing: groups.syncing })
-    .from(groups)
-    .where(eq(groups.jid, groupJid))
-    .get()
-  return row?.syncing === 1
 }

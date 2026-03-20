@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}}</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      background: #f0f2f5;
+    }
+    header {
+      background: white;
+      padding: 1rem 2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.2rem; color: #1a1a1a; margin: 0; }
+    header nav { display: flex; gap: 1rem; align-items: center; }
+    header nav a, header nav button {
+      color: #667781; text-decoration: none; font-size: 0.85rem;
+      background: none; border: none; cursor: pointer;
+    }
+    header nav a:hover, header nav button:hover { text-decoration: underline; }
+    .content { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    .back { color: #667781; text-decoration: none; font-size: 0.85rem; }
+    .back:hover { text-decoration: underline; }
+    .group-header { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0; }
+    .group-header h2 { font-size: 1.1rem; color: #1a1a1a; margin: 0; }
+    .group-meta { color: #667781; font-size: 0.85rem; margin-bottom: 1.5rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    th, td { padding: 0.35rem 0.75rem; text-align: left; }
+    th {
+      background: #f8f9fa; color: #667781; font-weight: 600; font-size: 0.85rem;
+      cursor: pointer; user-select: none; white-space: nowrap;
+    }
+    th:hover { color: #1a1a1a; }
+    th .sort-arrow { font-size: 0.7rem; margin-left: 0.25rem; }
+    td { border-top: 1px solid #eee; color: #1a1a1a; font-size: 0.85rem; line-height: 1.6; }
+    tr.even td { background: #f8f9fa; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    th.num { text-align: right; }
+    .badge {
+      display: inline-block;
+      padding: 0 0.4rem;
+      vertical-align: baseline;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-admin { background: #fff3e0; color: #e65100; }
+    .badge-superadmin { background: #f3e5f5; color: #7b1fa2; }
+    .badge-bot { background: #e0f2f1; color: #00695c; }
+    .badge-none { background: #fce4ec; color: #c62828; }
+    .inactive { color: #999; }
+    .phone-link { color: #667781; text-decoration: none; font-size: 0.85rem; }
+    .phone-link:hover { text-decoration: underline; }
+    .loading { text-align: center; padding: 2rem; color: #667781; }
+    .toggle { color: #667781; font-size: 0.8rem; cursor: pointer; text-decoration: underline; border: none; background: none; margin-top: 0.75rem; }
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      color: #667781;
+    }
+    .pagination .pages { display: flex; gap: 0.25rem; }
+    .pagination button {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 0.3rem 0.6rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: #1a1a1a;
+    }
+    .pagination button:hover { background: #f0f2f5; }
+    .pagination button.active { background: #25d366; color: white; border-color: #25d366; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{{PROJECT_NAME}}</h1>
+    <nav>
+      <a href="/settings">Settings</a>
+      <form method="POST" action="/logout" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
+        <button type="submit">Log out {{ADMIN_USERNAME}}</button>
+      </form>
+    </nav>
+  </header>
+  <div class="content">
+    <a class="back" href="/">&larr; Back to groups</a>
+    <div class="group-header">
+      <h2 id="group-name">Loading...</h2>
+    </div>
+    <div class="group-meta" id="group-meta"></div>
+    <div id="members"><p class="loading">Loading...</p></div>
+    <div id="pagination" class="pagination" style="display:none"></div>
+    <button class="toggle" id="toggle-left" style="display:none" onclick="toggleLeft()">Show former members</button>
+  </div>
+  <script>
+    const groupJid = decodeURIComponent(window.location.pathname.split('/group/')[1]);
+    let allMembers = [];
+    let showLeft = false;
+    let sortCol = 'name';
+    let sortAsc = true;
+    let page = 1;
+    const perPage = parseInt('{{PAGE_SIZE}}', 10) || 50;
+
+    const columns = [
+      { key: 'name', label: 'Participant', num: false },
+      { key: 'phone', label: 'Phone', num: false },
+      { key: 'posts', label: 'Posts', num: true },
+      { key: 'reactions', label: 'Reactions', num: true },
+      { key: 'total', label: 'Activity', num: true },
+      { key: 'lastActivity', label: 'Last activity', num: false },
+    ];
+
+    async function loadGroup() {
+      try {
+        const res = await fetch('/api/groups/' + encodeURIComponent(groupJid));
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (res.status === 404) {
+          document.getElementById('group-name').textContent = 'Group not found';
+          document.getElementById('members').innerHTML = '';
+          return;
+        }
+        const data = await res.json();
+        document.getElementById('group-name').textContent = data.group.name;
+        document.getElementById('group-meta').textContent = data.group.memberCount + ' members' + (data.group.lastActivity ? ' \u00b7 last active ' + timeAgo(data.group.lastActivity) : '');
+        allMembers = data.members || [];
+        const hasLeft = allMembers.some(m => m.membership === 'none');
+        if (hasLeft) document.getElementById('toggle-left').style.display = 'inline';
+        renderMembers();
+      } catch (e) {
+        document.getElementById('members').innerHTML = '<p class="loading">Failed to load group</p>';
+      }
+    }
+
+    function sortValue(m, col) {
+      if (col === 'name') return m.displayName || '\uffff';
+      if (col === 'phone') return m.phoneNumber || '';
+      if (col === 'lastActivity') return m.lastActivity || 0;
+      return m[col] || 0;
+    }
+
+    function renderMembers() {
+      let members = showLeft ? [...allMembers] : allMembers.filter(m => m.membership !== 'none');
+      if (members.length === 0) {
+        document.getElementById('members').innerHTML = '<p class="loading">No members found</p>';
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+      members.sort((a, b) => {
+        if (a.membership === 'none' && b.membership !== 'none') return 1;
+        if (a.membership !== 'none' && b.membership === 'none') return -1;
+        const va = sortValue(a, sortCol), vb = sortValue(b, sortCol);
+        let cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+        return sortAsc ? cmp : -cmp;
+      });
+
+      const totalPages = Math.ceil(members.length / perPage);
+      if (page > totalPages) page = totalPages;
+      if (page < 1) page = 1;
+      const start = (page - 1) * perPage;
+      const pageMembers = members.slice(start, start + perPage);
+
+      let html = '<table><thead><tr>';
+      for (const col of columns) {
+        const arrow = sortCol === col.key ? (sortAsc ? '\u25b2' : '\u25bc') : '';
+        html += '<th' + (col.num ? ' class="num"' : '') + ' onclick="doSort(\'' + col.key + '\')">' + col.label + '<span class="sort-arrow">' + arrow + '</span></th>';
+      }
+      html += '</tr></thead><tbody>';
+
+      let rowIdx = 0;
+      for (const m of pageMembers) {
+        const isLeft = m.membership === 'none';
+        const isInactive = m.total === 0;
+        const classes = [(isLeft || isInactive) ? 'inactive' : '', rowIdx % 2 === 1 ? 'even' : ''].filter(Boolean).join(' ');
+        const cls = classes ? ' class="' + classes + '"' : '';
+        rowIdx++;
+
+        const displayName = m.displayName || '~';
+        let nameHtml = escHtml(displayName);
+        if (m.membership === 'admin' || m.membership === 'superadmin') nameHtml += ' <span class="badge badge-' + m.membership + '">' + m.membership + '</span>';
+        if (m.isBot) nameHtml += ' <span class="badge badge-bot">This bot</span>';
+        if (isLeft) nameHtml += ' <span class="badge badge-none">left</span>';
+
+        const phone = m.phoneNumber ? '<a class="phone-link" href="https://wa.me/' + escHtml(m.phoneNumber) + '">+' + escHtml(m.phoneNumber) + '</a>' : '<span class="inactive">-</span>';
+        const lastAct = m.lastActivity ? timeAgo(m.lastActivity) : '<span class="inactive">-</span>';
+
+        html += '<tr' + cls + '><td>' + nameHtml + '</td><td>' + phone + '</td><td class="num">' + m.posts + '</td><td class="num">' + m.reactions + '</td><td class="num"><strong>' + m.total + '</strong></td><td>' + lastAct + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      document.getElementById('members').innerHTML = html;
+
+      const pagEl = document.getElementById('pagination');
+      if (totalPages <= 1) { pagEl.style.display = 'none'; return; }
+      pagEl.style.display = 'flex';
+      const from = start + 1, to = Math.min(start + perPage, members.length);
+      let pagHtml = '<span>' + from + '\u2013' + to + ' of ' + members.length + '</span><div class="pages">';
+      pagHtml += '<button onclick="goPage(' + (page - 1) + ')"' + (page <= 1 ? ' disabled' : '') + '>&laquo;</button>';
+      let startPage = Math.max(1, page - 3), endPage = Math.min(totalPages, startPage + 6);
+      if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
+      for (let i = startPage; i <= endPage; i++) pagHtml += '<button onclick="goPage(' + i + ')"' + (i === page ? ' class="active"' : '') + '>' + i + '</button>';
+      pagHtml += '<button onclick="goPage(' + (page + 1) + ')"' + (page >= totalPages ? ' disabled' : '') + '>&raquo;</button></div>';
+      pagEl.innerHTML = pagHtml;
+    }
+
+    function doSort(col) {
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = !columns.find(c => c.key === col)?.num; }
+      page = 1;
+      renderMembers();
+    }
+    function goPage(p) { page = p; renderMembers(); document.getElementById('members').scrollIntoView({ behavior: 'smooth' }); }
+    function toggleLeft() { showLeft = !showLeft; page = 1; document.getElementById('toggle-left').textContent = showLeft ? 'Hide former members' : 'Show former members'; renderMembers(); }
+    function timeAgo(ts) {
+      const s = Math.floor(Date.now() / 1000) - ts;
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+      return Math.floor(d / 30) + 'mo ago';
+    }
+    function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    loadGroup();
+  </script>
+</body>
+</html>

@@ -22,6 +22,7 @@ export function sendPage(reply: FastifyReply, filename: string, req?: FastifyReq
     .replaceAll('{{PROJECT_NAME}}', getSettingOrDefault('project_name', 'WhatsApp Group Monitor'))
     .replaceAll('{{CSRF_TOKEN}}', csrfToken)
     .replaceAll('{{ADMIN_USERNAME}}', config.adminUsername)
+    .replaceAll('{{PAGE_SIZE}}', getSettingOrDefault('page_size', '50'))
   return reply.type('text/html').send(html)
 }
 

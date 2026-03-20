@@ -1,4 +1,5 @@
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
@@ -34,6 +35,7 @@ export function getCachedMessage(id: string): WAMessage | undefined {
 }
 
 async function getMessage(key: WAMessageKey) {
+  logger.debug({ key }, 'Fetching message for key')
   if (key.id) return msgCache.get(key.id)?.message ?? undefined
   return undefined
 }
@@ -46,7 +48,9 @@ export async function startConnection(): Promise<void> {
 
   sock = makeWASocket({
     version,
-    browser: [getSettingOrDefault('project_name', 'WhatsApp Group Monitor'), 'Chrome', '22.0'],
+    browser: Browsers.macOS('Desktop'),
+    syncFullHistory: true,
+    shouldSyncHistoryMessage: () => true,
     logger: logger.child({ module: 'baileys' }),
     auth: {
       creds: state.creds,

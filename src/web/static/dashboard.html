@@ -68,6 +68,9 @@
     .badge-admin { background: #fff3e0; color: #e65100; }
     .badge-superadmin { background: #f3e5f5; color: #7b1fa2; }
     .indent { padding-left: 2.5rem; }
+    .muted { color: #999; }
+    a.group-link { color: #1a1a1a; text-decoration: none; }
+    a.group-link:hover { text-decoration: underline; }
     .loading { text-align: center; padding: 2rem; color: #667781; }
   </style>
 </head>
@@ -127,14 +130,18 @@
         }
         const standalone = groups.filter(g => !g.isCommunity && !g.parentCommunityJid);
 
-        let html = '<table><thead><tr><th>Name</th><th class="num">Members</th><th>Bot role</th></tr></thead><tbody>';
+        let html = '<table><thead><tr><th>Name</th><th class="num">Members</th><th class="num">Activity (30d)</th><th>Last activity</th><th>Bot role</th></tr></thead><tbody>';
 
         function addRow(g, indent) {
-          const name = (indent ? '<span class="indent">' : '') + escHtml(g.name)
+          const nameText = escHtml(g.name);
+          const link = g.isCommunity ? nameText : '<a class="group-link" href="/group/' + encodeURIComponent(g.jid) + '">' + nameText + '</a>';
+          const name = (indent ? '<span class="indent">' : '') + link
             + (g.isCommunity ? ' <span class="badge badge-community">community</span>' : '')
             + (indent ? '</span>' : '');
           const role = '<span class="badge badge-' + g.botMembership + '">' + g.botMembership + '</span>';
-          html += '<tr><td>' + name + '</td><td class="num">' + (g.memberCount || 0) + '</td><td>' + role + '</td></tr>';
+          const activity = g.monthlyActivity || 0;
+          const lastAct = g.lastActivity ? timeAgo(g.lastActivity) : '<span class="muted">-</span>';
+          html += '<tr><td>' + name + '</td><td class="num">' + (g.memberCount || 0) + '</td><td class="num">' + activity + '</td><td>' + lastAct + '</td><td>' + role + '</td></tr>';
         }
 
         for (const c of communities) {
@@ -174,6 +181,18 @@
       window.location.reload();
     }
 
+    function timeAgo(ts) {
+      const seconds = Math.floor(Date.now() / 1000) - ts;
+      if (seconds < 60) return 'just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return minutes + 'm ago';
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + 'h ago';
+      const days = Math.floor(hours / 24);
+      if (days < 30) return days + 'd ago';
+      const months = Math.floor(days / 30);
+      return months + 'mo ago';
+    }
     function escHtml(s) {
       const d = document.createElement('div');
       d.textContent = s;

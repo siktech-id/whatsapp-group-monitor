@@ -24,8 +24,6 @@ export const groups = sqliteTable('groups', {
   botMembership: text('bot_membership', { enum: ['none', 'participant', 'admin', 'superadmin'] }).notNull().default('none'),
   botFunctions: integer('bot_functions').notNull().default(0),
   isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
-  syncing: integer('syncing'),
-  syncedAt: integer('synced_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
 })
 
@@ -71,7 +69,6 @@ export const groupActivityLog = sqliteTable('group_activity_log', {
   eventType: text('event_type', { enum: activityEventTypes }).notNull(),
   metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
   raw: text('raw', { mode: 'json' }).$type<Record<string, unknown>>(),
-  processed: integer('processed').notNull().default(0),
   timestamp: integer('timestamp').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
 })

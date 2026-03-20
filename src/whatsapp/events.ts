@@ -3,7 +3,6 @@ import { handleConnectionUpdate, updateBotUser } from './handlers/connection.js'
 import { syncGroups } from './handlers/group-sync.js'
 import { handleMessagesUpsert } from './handlers/activity.js'
 import { handleMessagesReaction } from './handlers/activity-reactions.js'
-import { handleHistorySync } from './handlers/history-sync.js'
 import { logger } from '../utils/logger.js'
 
 export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void>) {
@@ -28,10 +27,6 @@ export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void
 
     if (events['messages.reaction']) {
       handleMessagesReaction(events['messages.reaction'])
-    }
-
-    if (events['messaging-history.set']) {
-      handleHistorySync(events['messaging-history.set'], sock)
     }
   })
 }

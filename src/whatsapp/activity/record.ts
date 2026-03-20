@@ -3,7 +3,7 @@ import type { WAMessage } from 'baileys'
 import type { ActivityEventType, GroupActivityRow } from '../../db/schema.js'
 import { insertActivity } from '../../db/queries/activity.js'
 import { processRecord } from './processor.js'
-import { logger } from '../../utils/logger.js'
+import { getSock } from '../client.js'
 
 /** Convert a value to a JSON-safe object (replace binary, bigint) */
 function safeJson(obj: unknown): unknown {
@@ -67,8 +67,8 @@ export class ActivityRecord {
   }
 
   /** Insert into group_activity_log. Returns false if duplicate. */
-  save(processed: -1 | 0 | 1): boolean {
-    return insertActivity(this, processed)
+  save(): boolean {
+    return insertActivity(this)
   }
 
   /** Run processing actions on this record. */
@@ -76,10 +76,10 @@ export class ActivityRecord {
     processRecord(this)
   }
 
-  /** Save and optionally process immediately. */
-  saveAndProcess(immediate: boolean): void {
-    const inserted = this.save(immediate ? 1 : 0)
-    if (inserted && immediate) {
+  /** Save and process. */
+  saveAndProcess(): void {
+    const inserted = this.save()
+    if (inserted) {
       this.process()
     }
   }
@@ -104,11 +104,18 @@ export class ActivityRecord {
     const messageId = msg.key.id
     if (!messageId) return null
 
-    const userJid = msg.key.participant
-      ? jidNormalizedUser(msg.key.participant)
-      : msg.key.fromMe
-        ? 'self'
-        : null
+    let userJid: string | null = null
+    const participant = msg.key.participant || (msg.key as any).participantAlt
+    if (participant) {
+      userJid = jidNormalizedUser(participant)
+    } else if (msg.key.fromMe) {
+      try {
+        const sock = getSock()
+        userJid = jidNormalizedUser(sock.user?.lid || sock.user?.id || '')
+      } catch {
+        userJid = 'self'
+      }
+    }
     if (!userJid) return null
 
     const timestamp = typeof msg.messageTimestamp === 'number'

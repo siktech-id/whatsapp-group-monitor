@@ -47,6 +47,11 @@ export function upsertGroupFromMetadata(meta: GroupMetadata, botJid: string, bot
   }).run()
 }
 
+export function getGroup(jid: string) {
+  const db = getAccountDb()
+  return db.select().from(groups).where(eq(groups.jid, jid)).get()
+}
+
 export function getAllGroups() {
   const db = getAccountDb()
   return db.select().from(groups).all()

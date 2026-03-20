@@ -335,8 +335,9 @@ export class ActivityRecord {
     const targetMsgId = key.id
     if (!groupJid || !targetMsgId) return null
 
-    // Reaction message ID = groupingKey or a generated one
-    const messageId = reaction.groupingKey || `reaction_${targetMsgId}_${userJid}`
+    // Reaction message ID: include timestamp to allow add+remove as separate records
+    const ts = Math.floor(Date.now() / 1000)
+    const messageId = reaction.groupingKey || `reaction_${targetMsgId}_${userJid}_${ts}`
 
     return new ActivityRecord({
       groupJid,

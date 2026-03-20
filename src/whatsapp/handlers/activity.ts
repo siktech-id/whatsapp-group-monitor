@@ -1,6 +1,8 @@
 import type { BaileysEventMap } from 'baileys'
 import { logger } from '../../utils/logger.js'
 import { isAccountDbReady } from '../../db/account.js'
+import { updateDisplayName } from '../../db/queries/users.js'
+import { cacheMessage } from '../client.js'
 import { ActivityRecord } from '../activity/record.js'
 
 export function handleMessagesUpsert(event: BaileysEventMap['messages.upsert']) {
@@ -12,8 +14,14 @@ export function handleMessagesUpsert(event: BaileysEventMap['messages.upsert']) 
     const groupJid = msg.key.remoteJid
     if (!groupJid || !groupJid.endsWith('@g.us')) continue
 
+    cacheMessage(msg)
+
     const record = ActivityRecord.fromMessage(msg, groupJid)
     if (!record) continue
+
+    if (msg.pushName && record.userJid) {
+      updateDisplayName(record.userJid, msg.pushName)
+    }
 
     record.saveAndProcess()
 

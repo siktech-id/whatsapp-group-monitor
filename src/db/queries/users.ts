@@ -30,3 +30,25 @@ export function upsertUser(jid: string, opts?: { phoneNumber?: string; displayNa
     },
   }).run()
 }
+
+export function userExists(jid: string): boolean {
+  const db = getAccountDb()
+  return !!db.select({ jid: users.jid }).from(users).where(eq(users.jid, jid)).get()
+}
+
+export function updateDisplayName(jid: string, name: string) {
+  const db = getAccountDb()
+  const now = new Date()
+  return db.update(users)
+    .set({ displayName: name, displayNameUpdatedAt: now, updatedAt: now })
+    .where(eq(users.jid, jid))
+    .run()
+}
+
+export function updatePhoneNumber(jid: string, phoneJid: string) {
+  const db = getAccountDb()
+  return db.update(users)
+    .set({ phoneNumber: bareId(phoneJid), updatedAt: new Date() })
+    .where(eq(users.jid, jid))
+    .run()
+}

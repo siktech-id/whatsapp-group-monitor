@@ -1,9 +1,10 @@
-import { getContentType, proto, jidNormalizedUser } from 'baileys'
+import { getContentType, proto, jidNormalizedUser, decryptPollVote, getKeyAuthor } from 'baileys'
+import { createHash } from 'crypto'
 import type { WAMessage } from 'baileys'
 import type { ActivityEventType, GroupActivityRow } from '../../db/schema.js'
 import { insertActivity } from '../../db/queries/activity.js'
 import { processRecord } from './processor.js'
-import { getSock } from '../client.js'
+import { getSock, getCachedMessage } from '../client.js'
 
 /** Convert a value to a JSON-safe object (replace binary, bigint) */
 function safeJson(obj: unknown): unknown {
@@ -171,10 +172,58 @@ export class ActivityRecord {
     // Poll vote
     const pollUpdate = msg.message?.pollUpdateMessage
     if (pollUpdate) {
+      const pollMsgId = pollUpdate.pollCreationMessageKey?.id
+      let selectedOptions: string[] = []
+
+      if (pollMsgId && pollUpdate.vote) {
+        try {
+          const pollCreationMsg = getCachedMessage(pollMsgId)
+          const pollEncKey = pollCreationMsg?.message?.messageContextInfo?.messageSecret
+          if (pollEncKey && pollUpdate.pollCreationMessageKey) {
+            const sock = getSock()
+            const meId = jidNormalizedUser(sock.user?.id || '')
+            const meLid = sock.user?.lid ? jidNormalizedUser(sock.user.lid) : meId
+            const isLid = msg.key.addressingMode === 'lid'
+
+            const pollCreatorJid = isLid
+              ? (pollUpdate.pollCreationMessageKey.fromMe ? meLid : (pollUpdate.pollCreationMessageKey.participant || getKeyAuthor(pollUpdate.pollCreationMessageKey, meId)))
+              : getKeyAuthor(pollUpdate.pollCreationMessageKey, meId)
+            const voterJid = isLid
+              ? (msg.key.fromMe ? meLid : (msg.key.participant || getKeyAuthor(msg.key, meId)))
+              : getKeyAuthor(msg.key, meId)
+
+            const decrypted = decryptPollVote(pollUpdate.vote, {
+              pollEncKey,
+              pollCreatorJid,
+              pollMsgId,
+              voterJid,
+            })
+
+            const pollMsg = pollCreationMsg?.message?.pollCreationMessage
+              || pollCreationMsg?.message?.pollCreationMessageV2
+              || pollCreationMsg?.message?.pollCreationMessageV3
+            const optionHashes = new Map<string, string>()
+            for (const opt of pollMsg?.options || []) {
+              if (opt.optionName) {
+                const hash = createHash('sha256').update(opt.optionName).digest('hex')
+                optionHashes.set(hash, opt.optionName)
+              }
+            }
+            selectedOptions = (decrypted.selectedOptions || []).map(hash => {
+              const hex = Buffer.from(hash).toString('hex')
+              return optionHashes.get(hex) || hex
+            })
+          }
+        } catch {
+          // decryption failed — log without options
+        }
+      }
+
       return new ActivityRecord({
         groupJid, userJid, messageId, timestamp, raw,
-        parentId: pollUpdate.pollCreationMessageKey?.id || null,
+        parentId: pollMsgId || null,
         eventType: 'poll_vote',
+        metadata: selectedOptions.length > 0 ? { selectedOptions } : null,
       })
     }
 

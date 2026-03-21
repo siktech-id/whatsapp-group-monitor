@@ -1,0 +1,12 @@
+services:
+  bot:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - bot-data:/app/data
+    env_file:
+      - .env
+
+volumes:
+  bot-data:

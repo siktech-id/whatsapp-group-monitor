@@ -2,6 +2,7 @@ import { eq, notInArray } from 'drizzle-orm'
 import type { GroupMetadata, GroupParticipant } from 'baileys'
 import { getAccountDb } from '../account.js'
 import { groups, type Group } from '../schema.js'
+import { GroupRecord } from '../../whatsapp/group/record.js'
 
 function bareId(jid: string): string {
   return jid.split(':')[0].split('@')[0]
@@ -47,14 +48,15 @@ export function upsertGroupFromMetadata(meta: GroupMetadata, botJid: string, bot
   }).run()
 }
 
-export function getGroup(jid: string) {
+export function getAllGroups(): GroupRecord[] {
   const db = getAccountDb()
-  return db.select().from(groups).where(eq(groups.jid, jid)).get()
+  const records = db.select().from(groups).all().map(r => new GroupRecord(r))
+  GroupRecord.linkAll(records)
+  return records
 }
 
-export function getAllGroups() {
-  const db = getAccountDb()
-  return db.select().from(groups).all()
+export function getGroup(jid: string): GroupRecord | null {
+  return getAllGroups().find(g => g.jid === jid) ?? null
 }
 
 export function markAbsentGroupsAsNone(activeJids: string[]) {

@@ -112,7 +112,7 @@ export function registerRoutes(app: FastifyInstance) {
     const lastActivity = getGroupLastActivity(jids)
 
     const enriched = groups.map(g => ({
-      ...g,
+      ...g.toJSON(),
       memberCount: memberCounts.get(g.jid) ?? 0,
       monthlyActivity: activityCounts.get(g.jid) ?? 0,
       lastActivity: lastActivity.get(g.jid) ?? null,
@@ -162,7 +162,7 @@ export function registerRoutes(app: FastifyInstance) {
 
     return reply.send({
       group: {
-        ...group,
+        ...group.toJSON(),
         memberCount: memberCounts.get(jid) ?? 0,
         lastActivity: lastActivity.get(jid) ?? null,
       },

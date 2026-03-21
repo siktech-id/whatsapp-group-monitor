@@ -120,7 +120,7 @@
           return;
         }
 
-        const communities = groups.filter(g => g.isCommunity);
+        const sortName = (a, b) => a.name.localeCompare(b.name);
         const childMap = {};
         for (const g of groups) {
           if (g.parentCommunityJid) {
@@ -128,7 +128,8 @@
             childMap[g.parentCommunityJid].push(g);
           }
         }
-        const standalone = groups.filter(g => !g.isCommunity && !g.parentCommunityJid);
+        for (const jid in childMap) childMap[jid].sort(sortName);
+        const topLevel = groups.filter(g => !g.parentCommunityJid).sort(sortName);
 
         let html = '<table><thead><tr><th>Name</th><th class="num">Members</th><th class="num">Activity (30d)</th><th>Last activity</th><th>Bot role</th></tr></thead><tbody>';
 
@@ -144,14 +145,13 @@
           html += '<tr><td>' + name + '</td><td class="num">' + (g.memberCount || 0) + '</td><td class="num">' + activity + '</td><td>' + lastAct + '</td><td>' + role + '</td></tr>';
         }
 
-        for (const c of communities) {
-          addRow(c, false);
-          for (const child of (childMap[c.jid] || [])) {
-            addRow(child, true);
-          }
-        }
-        for (const g of standalone) {
+        for (const g of topLevel) {
           addRow(g, false);
+          if (g.isCommunity) {
+            for (const child of (childMap[g.jid] || [])) {
+              addRow(child, true);
+            }
+          }
         }
 
         html += '</tbody></table>';

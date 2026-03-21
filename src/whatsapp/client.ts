@@ -1,5 +1,4 @@
 import makeWASocket, {
-  Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
@@ -90,7 +89,7 @@ export async function startConnection(): Promise<void> {
 
   sock = makeWASocket({
     version,
-    browser: Browsers.macOS('Desktop'),
+    browser: [getSettingOrDefault('project_name', 'WhatsApp Group Monitor'), 'Chrome', '22.0'],
     syncFullHistory: true,
     shouldSyncHistoryMessage: () => true,
     logger: logger.child({ module: 'baileys' }),

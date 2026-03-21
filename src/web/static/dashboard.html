@@ -134,12 +134,12 @@
 
         function addRow(g, indent) {
           const nameText = escHtml(g.name);
-          const link = g.isCommunity ? nameText : '<a class="group-link" href="/group/' + encodeURIComponent(g.jid) + '">' + nameText + '</a>';
+          const link = '<a class="group-link" href="/group/' + encodeURIComponent(g.jid) + '">' + nameText + '</a>';
           const name = (indent ? '<span class="indent">' : '') + link
             + (g.isCommunity ? ' <span class="badge badge-community">community</span>' : '')
             + (indent ? '</span>' : '');
           const role = '<span class="badge badge-' + g.botMembership + '">' + g.botMembership + '</span>';
-          const activity = g.monthlyActivity || 0;
+          const activity = g.activityCount || 0;
           const lastAct = g.lastActivity ? timeAgo(g.lastActivity) : '<span class="muted">-</span>';
           html += '<tr><td>' + name + '</td><td class="num">' + (g.memberCount || 0) + '</td><td class="num">' + activity + '</td><td>' + lastAct + '</td><td>' + role + '</td></tr>';
         }

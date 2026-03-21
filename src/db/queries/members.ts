@@ -85,6 +85,58 @@ export function getGroupMembers(groupJid: string, opts?: { includeLeft?: boolean
     .all()
 }
 
+/** Count distinct active members across multiple groups (for communities) */
+export function getDistinctMemberCount(groupJids: string[]): number {
+  if (groupJids.length === 0) return 0
+  const db = getAccountDb()
+  const row = db.select({
+    cnt: sql<number>`count(distinct ${groupMembers.userJid})`.as('cnt'),
+  })
+    .from(groupMembers)
+    .where(and(
+      inArray(groupMembers.groupJid, groupJids),
+      notInArray(groupMembers.membership, ['none']),
+    ))
+    .get()
+  return row?.cnt ?? 0
+}
+
+/** Get distinct members across multiple groups with highest membership level */
+export function getDistinctMembers(groupJids: string[], opts?: { includeLeft?: boolean }) {
+  if (groupJids.length === 0) return []
+  const db = getAccountDb()
+  const conditions = [inArray(groupMembers.groupJid, groupJids)]
+  if (!opts?.includeLeft) {
+    conditions.push(notInArray(groupMembers.membership, ['none']))
+  }
+  return db.select({
+    userJid: groupMembers.userJid,
+    membership: sql<string>`case max(
+      case when ${groupMembers.membership} = 'superadmin' then 5
+      when ${groupMembers.membership} = 'admin' then 4
+      when ${groupMembers.membership} = 'participant' then 3
+      when ${groupMembers.membership} = 'pending_approval' then 2
+      when ${groupMembers.membership} = 'none' then 1
+      else 0 end)
+      when 5 then 'superadmin'
+      when 4 then 'admin'
+      when 3 then 'participant'
+      when 2 then 'pending_approval'
+      when 1 then 'none'
+      else 'participant' end`.as('membership'),
+    joinedAt: sql<Date | null>`min(${groupMembers.joinedAt})`.as('joined_at'),
+    leftAt: sql<Date | null>`max(${groupMembers.leftAt})`.as('left_at'),
+    displayName: users.displayName,
+    phoneNumber: users.phoneNumber,
+    isBanned: users.isBanned,
+  })
+    .from(groupMembers)
+    .innerJoin(users, eq(groupMembers.userJid, users.jid))
+    .where(and(...conditions))
+    .groupBy(groupMembers.userJid)
+    .all()
+}
+
 export function getGroupMemberCounts(groupJids: string[]): Map<string, number> {
   const result = new Map<string, number>()
   if (groupJids.length === 0) return result

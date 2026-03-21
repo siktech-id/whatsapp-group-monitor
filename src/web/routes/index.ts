@@ -7,8 +7,7 @@ import { getSock } from '../../whatsapp/client.js'
 import { requireAuth, requireAuthApi, generateCsrf, verifyCsrf } from '../middleware/auth.js'
 import { getSettingOrDefault, setSetting } from '../../db/queries/settings.js'
 import { getAllGroups, getGroup } from '../../db/queries/groups.js'
-import { getGroupMemberCounts, getGroupMembers } from '../../db/queries/members.js'
-import { getGroupActivityCounts, getGroupLastActivity, getGroupUserActivity } from '../../db/queries/activity.js'
+import { GroupRecord } from '../../whatsapp/group/record.js'
 import { isAccountDbReady } from '../../db/account.js'
 import { jidNormalizedUser } from 'baileys'
 
@@ -105,19 +104,8 @@ export function registerRoutes(app: FastifyInstance) {
       return reply.send({ groups: [] })
     }
     const groups = getAllGroups()
-    const jids = groups.map(g => g.jid)
-    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 86400)
-    const memberCounts = getGroupMemberCounts(jids)
-    const activityCounts = getGroupActivityCounts(jids, thirtyDaysAgo)
-    const lastActivity = getGroupLastActivity(jids)
-
-    const enriched = groups.map(g => ({
-      ...g.toJSON(),
-      memberCount: memberCounts.get(g.jid) ?? 0,
-      monthlyActivity: activityCounts.get(g.jid) ?? 0,
-      lastActivity: lastActivity.get(g.jid) ?? null,
-    }))
-    return reply.send({ groups: enriched })
+    GroupRecord.populateAllSummaries(groups)
+    return reply.send({ groups: groups.map(g => g.toJSON()) })
   })
 
   app.get('/group/:jid', { preHandler: requireAuth }, async (req, reply) => {
@@ -135,10 +123,8 @@ export function registerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Group not found' })
     }
 
-    const members = getGroupMembers(jid, { includeLeft: true })
-    const memberCounts = getGroupMemberCounts([jid])
-    const lastActivity = getGroupLastActivity([jid])
-    const userActivity = getGroupUserActivity(jid, 30)
+    const members = group.getMembers({ includeLeft: true })
+    const userActivity = group.getUserActivity(30)
     const activityMap = new Map(userActivity.map(a => [a.userJid, a]))
 
     let botUserJid: string | null = null
@@ -163,8 +149,8 @@ export function registerRoutes(app: FastifyInstance) {
     return reply.send({
       group: {
         ...group.toJSON(),
-        memberCount: memberCounts.get(jid) ?? 0,
-        lastActivity: lastActivity.get(jid) ?? null,
+        memberCount: group.getMemberCount(),
+        lastActivity: group.getLastActivity(),
       },
       members: enrichedMembers,
     })

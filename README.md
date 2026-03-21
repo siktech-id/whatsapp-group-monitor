@@ -14,10 +14,9 @@ If the service restarts, it automatically catches up on messages it missed while
 
 ### Railway
 
-1. Deploy from GitHub repo
-2. Add a **Volume** mounted at `/app/data`
-3. Set environment variables: `ADMIN_PASSWORD` (required), optionally `ADMIN_USERNAME`
-4. Railway auto-detects the Dockerfile and builds on every push to main
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/whatsapp-group-monitor?referralCode=5IPNhU&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+Click the button above to deploy. The template sets up the volume and exposes HTTPS automatically. You only need to set `ADMIN_PASSWORD` during setup.
 
 ### Docker
 
@@ -62,6 +61,12 @@ Additional settings (project name, page size) are configurable from the Settings
 
 Each WhatsApp account gets its own database at `data/{phone}/account.db`. Disconnecting and connecting a different number creates a separate database — no data mixing between accounts. Shared settings are stored in `data/monitor.db`.
 
+Only one WhatsApp account can be connected at a time. Activity is only tracked while the account is connected. If you need to monitor multiple accounts simultaneously, set up a separate instance (container) for each one.
+
 ## Tech Stack
 
 Baileys (WhatsApp Web) + Fastify + SQLite (better-sqlite3) + Drizzle ORM + TypeScript
+
+## License
+
+[MIT](LICENSE)

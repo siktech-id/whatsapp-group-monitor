@@ -128,6 +128,7 @@
       { key: 'reactions', label: 'Reactions', num: true },
       { key: 'total', label: 'Activity', num: true },
       { key: 'lastActivity', label: 'Last activity', num: false },
+      { key: 'lastReadAt', label: 'Last read', num: false },
     ];
 
     async function loadGroup() {
@@ -155,6 +156,7 @@
       if (col === 'name') return m.displayName || '\uffff';
       if (col === 'phone') return m.phoneNumber || '';
       if (col === 'lastActivity') return m.lastActivity || 0;
+      if (col === 'lastReadAt') return m.lastReadAt || '';
       return m[col] || 0;
     }
 
@@ -202,8 +204,9 @@
 
         const phone = m.phoneNumber ? '<a class="phone-link" href="https://wa.me/' + escHtml(m.phoneNumber) + '">+' + escHtml(m.phoneNumber) + '</a>' : '<span class="inactive">-</span>';
         const lastAct = m.lastActivity ? timeAgo(m.lastActivity) : '<span class="inactive">-</span>';
+        const lastRead = m.lastReadAt ? daysAgo(m.lastReadAt) : '<span class="inactive">-</span>';
 
-        html += '<tr' + cls + '><td>' + nameHtml + '</td><td>' + phone + '</td><td class="num">' + m.posts + '</td><td class="num">' + m.reactions + '</td><td class="num"><strong>' + m.total + '</strong></td><td>' + lastAct + '</td></tr>';
+        html += '<tr' + cls + '><td>' + nameHtml + '</td><td>' + phone + '</td><td class="num">' + m.posts + '</td><td class="num">' + m.reactions + '</td><td class="num"><strong>' + m.total + '</strong></td><td>' + lastAct + '</td><td>' + lastRead + '</td></tr>';
       }
       html += '</tbody></table>';
       document.getElementById('members').innerHTML = html;
@@ -236,6 +239,13 @@
       const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
       const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
       return Math.floor(d / 30) + 'mo ago';
+    }
+    function daysAgo(dateStr) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (dateStr === today) return 'Today';
+      const diff = Math.round((new Date(today) - new Date(dateStr)) / 86400000);
+      if (diff === 1) return 'Yesterday';
+      return diff + ' days ago';
     }
     function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     loadGroup();

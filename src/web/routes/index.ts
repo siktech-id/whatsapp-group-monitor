@@ -10,6 +10,9 @@ import { getAllGroups, getGroup } from '../../db/queries/groups.js'
 import { GroupRecord } from '../../whatsapp/group/record.js'
 import { isAccountDbReady } from '../../db/account.js'
 import { jidNormalizedUser } from 'baileys'
+import { getUser } from '../../db/queries/users.js'
+import { getUserGroupMemberships } from '../../db/queries/members.js'
+import { getUserActivityPerGroup } from '../../db/queries/activity.js'
 
 export function registerRoutes(app: FastifyInstance) {
   // --- Public: login ---
@@ -154,6 +157,66 @@ export function registerRoutes(app: FastifyInstance) {
       },
       members: enrichedMembers,
     })
+  })
+
+  app.get('/user/:jid', { preHandler: requireAuth }, async (req, reply) => {
+    generateCsrf(req)
+    return sendPage(reply, 'user.html', req)
+  })
+
+  app.get('/api/users/:jid', { preHandler: requireAuthApi }, async (req, reply) => {
+    if (!isAccountDbReady()) return reply.status(503).send({ error: 'Not connected' })
+    const { jid } = req.params as { jid: string }
+    const user = getUser(jid)
+    if (!user) return reply.status(404).send({ error: 'User not found' })
+
+    const memberships = getUserGroupMemberships(jid)
+    const activityData = getUserActivityPerGroup(jid, 30)
+    const activityMap = new Map(activityData.map(a => [a.groupJid, a]))
+
+    const allGroups = getAllGroups()
+    const groupMap = new Map(allGroups.map(g => [g.jid, g]))
+    const membershipGroupJids = new Set(memberships.map(m => m.groupJid))
+
+    const rows = memberships.map(m => ({
+      groupJid: m.groupJid,
+      groupName: m.groupName,
+      isCommunity: m.isCommunity,
+      parentCommunityJid: m.parentCommunityJid,
+      membership: m.membership,
+      lastReadAt: m.lastReadAt,
+      headerOnly: false,
+      posts: activityMap.get(m.groupJid)?.posts ?? 0,
+      reactions: activityMap.get(m.groupJid)?.reactions ?? 0,
+      total: activityMap.get(m.groupJid)?.total ?? 0,
+      lastActivity: activityMap.get(m.groupJid)?.lastActivity ?? null,
+    }))
+
+    // Add parent communities as header-only grouping rows if user is not directly in them
+    const addedCommunities = new Set<string>()
+    for (const m of memberships) {
+      if (m.parentCommunityJid && !membershipGroupJids.has(m.parentCommunityJid) && !addedCommunities.has(m.parentCommunityJid)) {
+        const g = groupMap.get(m.parentCommunityJid)
+        if (g) {
+          rows.push({
+            groupJid: g.jid,
+            groupName: g.name,
+            isCommunity: true,
+            parentCommunityJid: null,
+            membership: 'none',
+            lastReadAt: null,
+            headerOnly: true,
+            posts: 0,
+            reactions: 0,
+            total: 0,
+            lastActivity: null,
+          })
+          addedCommunities.add(g.jid)
+        }
+      }
+    }
+
+    return reply.send({ user, memberships: rows })
   })
 
   app.get('/api/status', { preHandler: requireAuthApi }, async (_req, reply) => {

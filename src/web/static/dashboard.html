@@ -139,7 +139,7 @@
           const name = (indent ? '<span class="indent">' : '') + link
             + (g.isCommunity ? ' <span class="badge badge-community">community</span>' : '')
             + (indent ? '</span>' : '');
-          const role = '<span class="badge badge-' + g.botMembership + '">' + g.botMembership + '</span>';
+          const role = g.botMembership === 'none' ? '<span class="muted">-</span>' : '<span class="badge badge-' + g.botMembership + '">' + g.botMembership + '</span>';
           const activity = g.activityCount || 0;
           const lastAct = g.lastActivity ? timeAgo(g.lastActivity) : '<span class="muted">-</span>';
           html += '<tr><td>' + name + '</td><td class="num">' + (g.memberCount || 0) + '</td><td class="num">' + activity + '</td><td>' + lastAct + '</td><td>' + role + '</td></tr>';

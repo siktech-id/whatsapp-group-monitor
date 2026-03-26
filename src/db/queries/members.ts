@@ -1,13 +1,31 @@
 import { eq, and, notInArray, sql, inArray, or, isNull, lt } from 'drizzle-orm'
 import type { GroupParticipant } from 'baileys'
 import { getAccountDb } from '../account.js'
-import { groupMembers, users, type MembershipLevel } from '../schema.js'
+import { groupMembers, users, groups, type MembershipLevel } from '../schema.js'
 import { upsertUser } from './users.js'
 
 function membershipFromAdmin(admin: GroupParticipant['admin']): MembershipLevel {
   if (admin === 'superadmin') return 'superadmin'
   if (admin === 'admin') return 'admin'
   return 'participant'
+}
+
+export function getUserGroupMemberships(userJid: string) {
+  const db = getAccountDb()
+  return db.select({
+    groupJid: groupMembers.groupJid,
+    groupName: groups.name,
+    isCommunity: groups.isCommunity,
+    parentCommunityJid: groups.parentCommunityJid,
+    membership: groupMembers.membership,
+    lastReadAt: groupMembers.lastReadAt,
+    joinedAt: groupMembers.joinedAt,
+    leftAt: groupMembers.leftAt,
+  })
+    .from(groupMembers)
+    .innerJoin(groups, eq(groupMembers.groupJid, groups.jid))
+    .where(eq(groupMembers.userJid, userJid))
+    .all()
 }
 
 export function updateLastReadAt(groupJid: string, userJid: string, date: string) {

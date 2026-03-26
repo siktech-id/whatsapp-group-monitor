@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}}</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      background: #f0f2f5;
+    }
+    header {
+      background: white;
+      padding: 1rem 2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.2rem; color: #1a1a1a; margin: 0; }
+    header nav { display: flex; gap: 1rem; align-items: center; }
+    header nav a, header nav button {
+      color: #667781; text-decoration: none; font-size: 0.85rem;
+      background: none; border: none; cursor: pointer;
+    }
+    header nav a:hover, header nav button:hover { text-decoration: underline; }
+    .content { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    .back { color: #667781; text-decoration: none; font-size: 0.85rem; }
+    .back:hover { text-decoration: underline; }
+    .user-header { display: flex; align-items: baseline; gap: 0.75rem; margin: 1rem 0; }
+    .user-header h2 { font-size: 1.1rem; color: #1a1a1a; margin: 0; }
+    .user-meta { color: #667781; font-size: 0.85rem; margin-bottom: 1.5rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    th, td { padding: 0.35rem 0.75rem; text-align: left; }
+    th {
+      background: #f8f9fa; color: #667781; font-weight: 600; font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    td { border-top: 1px solid #eee; color: #1a1a1a; font-size: 0.85rem; line-height: 1.6; }
+    tr.even td { background: #f8f9fa; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    th.num { text-align: right; }
+    .badge {
+      display: inline-block;
+      padding: 0 0.4rem;
+      vertical-align: baseline;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-community { background: #e8f5e9; color: #2e7d32; }
+    .badge-participant { background: #e3f2fd; color: #1565c0; }
+    .badge-admin { background: #fff3e0; color: #e65100; }
+    .badge-superadmin { background: #f3e5f5; color: #7b1fa2; }
+    .badge-none { background: #fce4ec; color: #c62828; }
+    .inactive { color: #999; }
+    .muted { color: #999; }
+    .indent { padding-left: 2rem; }
+    a.phone-link { color: #667781; text-decoration: none; font-size: 0.85rem; }
+    a.phone-link:hover { text-decoration: underline; }
+    a.group-link { color: #1a1a1a; text-decoration: none; }
+    a.group-link:hover { text-decoration: underline; }
+    .loading { text-align: center; padding: 2rem; color: #667781; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{{PROJECT_NAME}}</h1>
+    <nav>
+      <a href="/settings">Settings</a>
+      <form method="POST" action="/logout" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
+        <button type="submit">Log out {{ADMIN_USERNAME}}</button>
+      </form>
+    </nav>
+  </header>
+  <div class="content">
+    <a class="back" href="/">&larr; Back to groups</a>
+    <div class="user-header">
+      <h2 id="user-name">Loading...</h2>
+    </div>
+    <div class="user-meta" id="user-meta"></div>
+    <div id="groups"><p class="loading">Loading...</p></div>
+  </div>
+  <script>
+    const userJid = decodeURIComponent(window.location.pathname.split('/user/')[1]);
+
+    async function loadUser() {
+      try {
+        const res = await fetch('/api/users/' + encodeURIComponent(userJid));
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (res.status === 404) {
+          document.getElementById('user-name').textContent = 'User not found';
+          document.getElementById('groups').innerHTML = '';
+          return;
+        }
+        const data = await res.json();
+        const u = data.user;
+        document.getElementById('user-name').textContent = u.displayName || '~';
+        const metaParts = [];
+        if (u.phoneNumber) metaParts.push('<a class="phone-link" href="https://wa.me/' + escHtml(u.phoneNumber) + '">+' + escHtml(u.phoneNumber) + '</a>');
+        metaParts.push(escHtml(u.jid));
+        document.getElementById('user-meta').innerHTML = metaParts.join(' \u00b7 ');
+
+        renderGroups(data.memberships || []);
+      } catch (e) {
+        document.getElementById('groups').innerHTML = '<p class="loading">Failed to load user</p>';
+      }
+    }
+
+    function renderGroups(memberships) {
+      if (memberships.length === 0) {
+        document.getElementById('groups').innerHTML = '<p class="loading">No groups found</p>';
+        return;
+      }
+
+      const sortName = (a, b) => a.groupName.localeCompare(b.groupName);
+
+      const childMap = {};
+      for (const m of memberships) {
+        if (m.parentCommunityJid && !m.isCommunity) {
+          if (!childMap[m.parentCommunityJid]) childMap[m.parentCommunityJid] = [];
+          childMap[m.parentCommunityJid].push(m);
+        }
+      }
+      for (const jid in childMap) childMap[jid].sort(sortName);
+
+      // Aggregate child stats into each community row
+      const communityTotals = {};
+      for (const communityJid in childMap) {
+        const children = childMap[communityJid];
+        communityTotals[communityJid] = {
+          posts: children.reduce((s, c) => s + c.posts, 0),
+          reactions: children.reduce((s, c) => s + c.reactions, 0),
+          total: children.reduce((s, c) => s + c.total, 0),
+          lastActivity: children.reduce((max, c) => c.lastActivity > (max || 0) ? c.lastActivity : max, null),
+          lastReadAt: children.reduce((max, c) => c.lastReadAt && c.lastReadAt > (max || '') ? c.lastReadAt : max, null),
+        };
+      }
+
+      const topLevel = memberships.filter(m => !m.parentCommunityJid).sort(sortName);
+
+      let html = '<table><thead><tr>';
+      html += '<th>Group</th>';
+      html += '<th>Role</th>';
+      html += '<th class="num">Posts</th>';
+      html += '<th class="num">Reactions</th>';
+      html += '<th class="num">Activity</th>';
+      html += '<th>Last activity</th>';
+      html += '<th>Last read</th>';
+      html += '</tr></thead><tbody>';
+
+      let rowIdx = 0;
+
+      function addRow(m, indent) {
+        const isLeft = m.membership === 'none' && !m.headerOnly;
+        const isInactive = m.total === 0 && !m.isCommunity;
+        const classes = [(isLeft || isInactive) ? 'inactive' : '', rowIdx % 2 === 1 ? 'even' : ''].filter(Boolean).join(' ');
+        const cls = classes ? ' class="' + classes + '"' : '';
+        rowIdx++;
+
+        const nameText = escHtml(m.groupName);
+        const link = '<a class="group-link" href="/group/' + encodeURIComponent(m.groupJid) + '">' + nameText + '</a>';
+        let nameHtml = (indent ? '<span class="indent">' : '') + link
+          + (m.isCommunity ? ' <span class="badge badge-community">community</span>' : '')
+          + (indent ? '</span>' : '');
+
+        let membershipHtml;
+        if (m.headerOnly) {
+          membershipHtml = '<span class="muted">-</span>';
+        } else if (m.membership === 'none') {
+          membershipHtml = '<span class="badge badge-none">left</span>';
+        } else {
+          membershipHtml = '<span class="badge badge-' + m.membership + '">' + m.membership + '</span>';
+        }
+
+        if (m.isCommunity) {
+          const agg = communityTotals[m.groupJid];
+          const lastAct = agg && agg.lastActivity ? timeAgo(agg.lastActivity) : '<span class="muted">-</span>';
+          const lastRead = agg && agg.lastReadAt ? daysAgo(agg.lastReadAt) : '<span class="muted">-</span>';
+          const posts = agg ? agg.posts : 0;
+          const reactions = agg ? agg.reactions : 0;
+          const total = agg ? agg.total : 0;
+          html += '<tr' + cls + '><td>' + nameHtml + '</td><td>' + membershipHtml + '</td>'
+            + '<td class="num">' + posts + '</td>'
+            + '<td class="num">' + reactions + '</td>'
+            + '<td class="num"><strong>' + total + '</strong></td>'
+            + '<td>' + lastAct + '</td>'
+            + '<td>' + lastRead + '</td>'
+            + '</tr>';
+          return;
+        }
+
+        const lastAct = m.lastActivity ? timeAgo(m.lastActivity) : '<span class="muted">-</span>';
+        const lastRead = m.lastReadAt ? daysAgo(m.lastReadAt) : '<span class="muted">-</span>';
+
+        html += '<tr' + cls + '><td>' + nameHtml + '</td>'
+          + '<td>' + membershipHtml + '</td>'
+          + '<td class="num">' + m.posts + '</td>'
+          + '<td class="num">' + m.reactions + '</td>'
+          + '<td class="num"><strong>' + m.total + '</strong></td>'
+          + '<td>' + lastAct + '</td>'
+          + '<td>' + lastRead + '</td>'
+          + '</tr>';
+      }
+
+      for (const m of topLevel) {
+        addRow(m, false);
+        if (m.isCommunity || m.headerOnly) {
+          for (const child of (childMap[m.groupJid] || [])) {
+            addRow(child, true);
+          }
+        }
+      }
+
+      html += '</tbody></table>';
+      document.getElementById('groups').innerHTML = html;
+    }
+
+    function timeAgo(ts) {
+      const s = Math.floor(Date.now() / 1000) - ts;
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+      return Math.floor(d / 30) + 'mo ago';
+    }
+    function daysAgo(dateStr) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (dateStr === today) return 'Today';
+      const diff = Math.round((new Date(today) - new Date(dateStr)) / 86400000);
+      if (diff === 1) return 'Yesterday';
+      return diff + ' days ago';
+    }
+    function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    loadUser();
+  </script>
+</body>
+</html>

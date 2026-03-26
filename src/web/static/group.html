@@ -66,6 +66,8 @@
     .inactive { color: #999; }
     .phone-link { color: #667781; text-decoration: none; font-size: 0.85rem; }
     .phone-link:hover { text-decoration: underline; }
+    a.user-link { color: #1a1a1a; text-decoration: none; }
+    a.user-link:hover { text-decoration: underline; }
     .loading { text-align: center; padding: 2rem; color: #667781; }
     .toggle { color: #667781; font-size: 0.8rem; cursor: pointer; text-decoration: underline; border: none; background: none; margin-top: 0.75rem; }
     .pagination {
@@ -197,7 +199,7 @@
         rowIdx++;
 
         const displayName = m.displayName || '~';
-        let nameHtml = escHtml(displayName);
+        let nameHtml = '<a class="user-link" href="/user/' + encodeURIComponent(m.userJid) + '">' + escHtml(displayName) + '</a>';
         if (m.membership === 'admin' || m.membership === 'superadmin') nameHtml += ' <span class="badge badge-' + m.membership + '">' + m.membership + '</span>';
         if (m.isBot) nameHtml += ' <span class="badge badge-bot">You</span>';
         if (isLeft) nameHtml += ' <span class="badge badge-none">left</span>';

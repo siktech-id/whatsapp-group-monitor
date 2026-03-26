@@ -31,6 +31,11 @@ export function upsertUser(jid: string, opts?: { phoneNumber?: string; displayNa
   }).run()
 }
 
+export function getUser(jid: string) {
+  const db = getAccountDb()
+  return db.select().from(users).where(eq(users.jid, jid)).get() ?? null
+}
+
 export function userExists(jid: string): boolean {
   const db = getAccountDb()
   return !!db.select({ jid: users.jid }).from(users).where(eq(users.jid, jid)).get()

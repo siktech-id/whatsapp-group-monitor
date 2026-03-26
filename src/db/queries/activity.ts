@@ -76,6 +76,26 @@ export function getGroupLastActivity(groupJids: string[]): Map<string, number> {
   return result
 }
 
+/** Per-group activity breakdown for a user in the last N days */
+export function getUserActivityPerGroup(userJid: string, sinceDays: number) {
+  const db = getAccountDb()
+  const sinceTs = Math.floor(Date.now() / 1000) - (sinceDays * 86400)
+  return db.select({
+    groupJid: groupActivityLog.groupJid,
+    total: sql<number>`count(*)`.as('total'),
+    posts: sql<number>`sum(case when event_type in ('message', 'poll_create', 'event_create') then 1 else 0 end)`.as('posts'),
+    reactions: sql<number>`sum(case when event_type in ('reaction', 'poll_vote', 'event_response') then 1 else 0 end)`.as('reactions'),
+    lastActivity: sql<number>`max(timestamp)`.as('last_activity'),
+  })
+    .from(groupActivityLog)
+    .where(and(
+      eq(groupActivityLog.userJid, userJid),
+      gte(groupActivityLog.timestamp, sinceTs),
+    ))
+    .groupBy(groupActivityLog.groupJid)
+    .all()
+}
+
 /** Per-user activity breakdown for a group in the last N days */
 export function getGroupUserActivity(groupJid: string, sinceDays: number) {
   const db = getAccountDb()

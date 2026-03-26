@@ -71,6 +71,7 @@ export function initAccountDb(phone: string) {
       joined_at INTEGER,
       left_at INTEGER,
       updated_at INTEGER NOT NULL,
+      last_read_at TEXT,
       PRIMARY KEY (group_jid, user_jid)
     );
 
@@ -108,6 +109,11 @@ export function initAccountDb(phone: string) {
   const actCols = (sqlite.pragma('table_info(group_activity_log)') as { name: string }[]).map(c => c.name)
   if (actCols.includes('processed')) {
     sqlite.exec('ALTER TABLE group_activity_log DROP COLUMN processed')
+  }
+
+  const memberCols = (sqlite.pragma('table_info(group_members)') as { name: string }[]).map(c => c.name)
+  if (!memberCols.includes('last_read_at')) {
+    sqlite.exec('ALTER TABLE group_members ADD COLUMN last_read_at TEXT')
   }
 
   currentPhone = phone

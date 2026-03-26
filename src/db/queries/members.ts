@@ -1,4 +1,4 @@
-import { eq, and, notInArray, sql, inArray } from 'drizzle-orm'
+import { eq, and, notInArray, sql, inArray, or, isNull, lt } from 'drizzle-orm'
 import type { GroupParticipant } from 'baileys'
 import { getAccountDb } from '../account.js'
 import { groupMembers, users, type MembershipLevel } from '../schema.js'
@@ -8,6 +8,18 @@ function membershipFromAdmin(admin: GroupParticipant['admin']): MembershipLevel 
   if (admin === 'superadmin') return 'superadmin'
   if (admin === 'admin') return 'admin'
   return 'participant'
+}
+
+export function updateLastReadAt(groupJid: string, userJid: string, date: string) {
+  const db = getAccountDb()
+  db.update(groupMembers)
+    .set({ lastReadAt: date })
+    .where(and(
+      eq(groupMembers.groupJid, groupJid),
+      eq(groupMembers.userJid, userJid),
+      or(isNull(groupMembers.lastReadAt), lt(groupMembers.lastReadAt, date)),
+    ))
+    .run()
 }
 
 export function upsertMembership(groupJid: string, userJid: string, membership: MembershipLevel) {

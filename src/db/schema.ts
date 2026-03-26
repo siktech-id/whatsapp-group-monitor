@@ -49,6 +49,7 @@ export const groupMembers = sqliteTable('group_members', {
   joinedAt: integer('joined_at', { mode: 'timestamp_ms' }),
   leftAt: integer('left_at', { mode: 'timestamp_ms' }),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  lastReadAt: text('last_read_at'),
 }, (table) => [
   primaryKey({ columns: [table.groupJid, table.userJid] }),
 ])

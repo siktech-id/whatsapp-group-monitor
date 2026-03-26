@@ -4,6 +4,7 @@ import { syncGroups } from './handlers/group-sync.js'
 import { handleMessagesUpsert } from './handlers/activity.js'
 import { handleMessagesReaction } from './handlers/activity-reactions.js'
 import { handleContactsUpsert, handleContactsUpdate } from './handlers/contacts.js'
+import { handleMessageReceiptUpdate } from './handlers/receipts.js'
 import { logger } from '../utils/logger.js'
 
 export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void>) {
@@ -36,6 +37,10 @@ export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void
 
     if (events['contacts.update']) {
       handleContactsUpdate(events['contacts.update'])
+    }
+
+    if (events['message-receipt.update']) {
+      handleMessageReceiptUpdate(events['message-receipt.update'])
     }
   })
 }

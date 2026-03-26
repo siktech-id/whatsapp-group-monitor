@@ -199,7 +199,7 @@
         const displayName = m.displayName || '~';
         let nameHtml = escHtml(displayName);
         if (m.membership === 'admin' || m.membership === 'superadmin') nameHtml += ' <span class="badge badge-' + m.membership + '">' + m.membership + '</span>';
-        if (m.isBot) nameHtml += ' <span class="badge badge-bot">This bot</span>';
+        if (m.isBot) nameHtml += ' <span class="badge badge-bot">You</span>';
         if (isLeft) nameHtml += ' <span class="badge badge-none">left</span>';
 
         const phone = m.phoneNumber ? '<a class="phone-link" href="https://wa.me/' + escHtml(m.phoneNumber) + '">+' + escHtml(m.phoneNumber) + '</a>' : '<span class="inactive">-</span>';

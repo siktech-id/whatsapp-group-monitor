@@ -1,0 +1,9 @@
+<header>
+  <h1>{{PROJECT_NAME}}</h1>
+  <nav>
+    <form method="POST" action="/logout" style="display:inline">
+      <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
+      <button type="submit">Log out {{ADMIN_USERNAME}}</button>
+    </form>
+  </nav>
+</header>

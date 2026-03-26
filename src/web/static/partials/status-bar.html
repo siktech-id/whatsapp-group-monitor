@@ -1,0 +1,65 @@
+<div class="user-info">
+  <div class="details" id="status-bar-details">Loading...</div>
+  <div class="kebab-menu">
+    <button class="kebab-btn" onclick="toggleKebab(event)">⋮</button>
+    <div class="kebab-dropdown" id="kebab-dropdown">
+      <a href="/settings">Settings</a>
+      <button id="disconnect-btn" onclick="disconnectDevice()" style="display:none">Disconnect</button>
+    </div>
+  </div>
+</div>
+<script>
+  function toggleKebab(e) {
+    e.stopPropagation();
+    document.getElementById('kebab-dropdown').classList.toggle('open');
+  }
+  document.addEventListener('click', () => {
+    document.getElementById('kebab-dropdown')?.classList.remove('open');
+  });
+
+  async function disconnectDevice() {
+    if (!confirm('Disconnect this device from WhatsApp?')) return;
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    await fetch('/disconnect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: '_csrf=' + encodeURIComponent(csrf),
+      redirect: 'manual',
+    });
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        const data = await (await fetch('/api/status')).json();
+        if (data.state !== 'open') break;
+      } catch { break; }
+    }
+    window.location.reload();
+  }
+
+  (async function initStatusBar() {
+    try {
+      const res = await fetch('/api/status');
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      const data = await res.json();
+      const el = document.getElementById('status-bar-details');
+      const dot = (color) => '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:0.5rem;vertical-align:middle"></span>';
+      const bar = el.closest('.user-info');
+      if (data.state === 'open') {
+        bar.classList.add('connected');
+        const phone = data.user?.phone ? '+' + data.user.phone : null;
+        const name = data.user?.name || null;
+        let text = 'Connected as';
+        if (phone) text += ' ' + phone;
+        if (name) text += ' (' + name + ')';
+        el.innerHTML = dot('#25d366') + text;
+        document.getElementById('disconnect-btn').style.display = '';
+      } else {
+        bar.classList.add('disconnected');
+        el.innerHTML = dot('#e74c3c') + 'Not connected';
+      }
+      document.dispatchEvent(new CustomEvent('statusbar:state', { detail: data.state }));
+    } catch {
+      document.getElementById('status-bar-details').innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e74c3c;margin-right:0.5rem;vertical-align:middle"></span>Not connected';
+    }
+  })();
+</script>

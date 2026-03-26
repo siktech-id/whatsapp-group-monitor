@@ -16,9 +16,16 @@ import { registerRoutes } from './routes/index.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const staticDir = resolve(__dirname, 'static')
 
+function resolvePartials(html: string): string {
+  return html.replace(/\{\{>\s*(\S+)\s*\}\}/g, (_, name) => {
+    const partialPath = resolve(staticDir, 'partials', `${name}.html`)
+    return readFileSync(partialPath, 'utf-8')
+  })
+}
+
 export function sendPage(reply: FastifyReply, filename: string, req?: FastifyRequest) {
   const csrfToken = req?.session?.csrfToken || ''
-  const html = readFileSync(resolve(staticDir, filename), 'utf-8')
+  const html = resolvePartials(readFileSync(resolve(staticDir, filename), 'utf-8'))
     .replaceAll('{{PROJECT_NAME}}', getSettingOrDefault('project_name', 'WhatsApp Group Monitor'))
     .replaceAll('{{CSRF_TOKEN}}', csrfToken)
     .replaceAll('{{ADMIN_USERNAME}}', config.adminUsername)

@@ -3,26 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings</title>
+  <title>Settings &middot; {{PROJECT_NAME}}</title>
   <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <link rel="stylesheet" href="/static/shared.css" />
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      background: #f0f2f5;
-    }
-    .container {
+    .content { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    .back { color: #667781; text-decoration: none; font-size: 0.85rem; }
+    .back:hover { text-decoration: underline; }
+    .settings-box {
       background: white;
       padding: 2rem;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      width: 400px;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      max-width: 400px;
+      margin: 1rem auto;
     }
-    h1 { color: #1a1a1a; font-size: 1.5rem; margin-bottom: 1.5rem; }
+    h2 { color: #1a1a1a; font-size: 1.1rem; margin: 0 0 1.5rem; }
     label { display: block; color: #667781; font-size: 0.85rem; margin-bottom: 0.25rem; }
     input {
       width: 100%;
@@ -35,7 +31,7 @@
       margin-bottom: 1rem;
     }
     input:focus { border-color: #25d366; }
-    button {
+    .save-btn {
       padding: 0.6rem 1.5rem;
       background: #25d366;
       color: white;
@@ -44,30 +40,29 @@
       font-size: 0.95rem;
       cursor: pointer;
     }
-    button:hover { background: #1da851; }
+    .save-btn:hover { background: #1da851; }
     .msg { font-size: 0.85rem; margin-top: 0.75rem; }
     .msg-ok { color: #25d366; }
     .msg-err { color: #e74c3c; }
-    .nav { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee; display: flex; justify-content: space-between; }
-    .nav a { color: #667781; font-size: 0.8rem; text-decoration: none; }
-    .nav a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Settings</h1>
-    <form id="form" onsubmit="save(event)">
-      <label for="project_name">Project name</label>
-      <input type="text" id="project_name" name="project_name" />
+  {{> header}}
+  <div class="content">
+    {{> status-bar}}
+    <a class="back" href="/" id="back-link">&larr; Back to groups</a>
+    <div class="settings-box">
+      <h2>Settings</h2>
+      <form id="form" onsubmit="save(event)">
+        <label for="project_name">Project name</label>
+        <input type="text" id="project_name" name="project_name" />
 
-      <label for="page_size">Items per page</label>
-      <input type="number" id="page_size" name="page_size" min="10" max="500" />
+        <label for="page_size">Items per page</label>
+        <input type="number" id="page_size" name="page_size" min="10" max="500" />
 
-      <button type="submit">Save</button>
-      <p class="msg" id="msg"></p>
-    </form>
-    <div class="nav">
-      <a href="/">&larr; Back</a>
+        <button type="submit" class="save-btn">Save</button>
+        <p class="msg" id="msg"></p>
+      </form>
     </div>
   </div>
   <script>
@@ -108,6 +103,10 @@
       el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
       setTimeout(() => { el.textContent = ''; }, 3000);
     }
+
+    document.addEventListener('statusbar:state', (e) => {
+      if (e.detail !== 'open') document.getElementById('back-link').textContent = '\u2190 Back';
+    });
 
     load();
   </script>

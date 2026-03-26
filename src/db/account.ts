@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.js'
 import * as schema from './schema.js'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
+let accountSqlite: InstanceType<typeof Database> | null = null
 let currentPhone: string | null = null
 
 export function getAccountDb() {
@@ -22,6 +23,10 @@ export function getAccountPhone(): string | null {
   return currentPhone
 }
 
+export function checkpointAccountDb() {
+  accountSqlite?.pragma('wal_checkpoint(FULL)')
+}
+
 export function initAccountDb(phone: string) {
   // If already open for the same phone, skip
   if (currentPhone === phone && db) return db
@@ -34,6 +39,7 @@ export function initAccountDb(phone: string) {
 
   const dbPath = resolve(accountDir, 'account.db')
   const sqlite = new Database(dbPath)
+  accountSqlite = sqlite
   sqlite.pragma('journal_mode = WAL')
   sqlite.pragma('foreign_keys = ON')
 
@@ -124,13 +130,12 @@ export function initAccountDb(phone: string) {
 export function closeAccountDb() {
   if (db) {
     try {
-      // Drizzle doesn't expose close directly, but the underlying sqlite instance does
-      // Access it via the session property
-      (db as any).session?.client?.close?.()
+      accountSqlite?.close()
     } catch {
       // ignore close errors
     }
     db = null
+    accountSqlite = null
     logger.info({ phone: currentPhone }, 'Account database closed')
     currentPhone = null
   }

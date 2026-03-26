@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backup &middot; {{PROJECT_NAME}}</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <link rel="stylesheet" href="/static/shared.css" />
+  <style>
+    .content { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    .back { color: #667781; text-decoration: none; font-size: 0.85rem; }
+    .back:hover { text-decoration: underline; }
+    .backup-box {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      max-width: 400px;
+      margin: 1rem auto;
+    }
+    h2 { color: #1a1a1a; font-size: 1.1rem; margin: 0 0 1.5rem; }
+    .item { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+    .item label { color: #1a1a1a; font-size: 0.95rem; cursor: pointer; }
+    .item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #25d366; }
+    .download-btn {
+      margin-top: 1.5rem;
+      padding: 0.6rem 1.5rem;
+      background: #25d366;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .download-btn:hover { background: #1da851; }
+    .download-btn:disabled { background: #aaa; cursor: default; }
+    .loading { color: #667781; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  {{> header}}
+  <div class="content">
+    {{> status-bar}}
+    <a class="back" href="/" id="back-link">&larr; Back to groups</a>
+    <div class="backup-box">
+      <h2>Backup</h2>
+      <form id="form" method="POST" action="/backup/download">
+        <input type="hidden" name="_csrf" id="csrf-field" value="{{CSRF_TOKEN}}" />
+        <div id="items"><p class="loading">Loading...</p></div>
+        <button type="submit" class="download-btn" id="download-btn" disabled>Download backup</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    async function loadItems() {
+      try {
+        const res = await fetch('/api/backup/items');
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        const data = await res.json();
+        const container = document.getElementById('items');
+        if (!data.items || data.items.length === 0) {
+          container.innerHTML = '<p class="loading">No items to backup</p>';
+          return;
+        }
+        container.innerHTML = data.items.map(item =>
+          `<div class="item">
+            <input type="checkbox" name="items" id="item-${item.id}" value="${escAttr(item.id)}" checked>
+            <label for="item-${item.id}">${escHtml(item.label)}</label>
+          </div>`
+        ).join('');
+        document.getElementById('download-btn').disabled = false;
+      } catch {
+        document.getElementById('items').innerHTML = '<p class="loading">Failed to load</p>';
+      }
+    }
+
+    function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function escAttr(s) { return s.replace(/"/g, '&quot;'); }
+
+    document.addEventListener('statusbar:state', (e) => {
+      if (e.detail !== 'open') document.getElementById('back-link').textContent = '\u2190 Back';
+    });
+
+    loadItems();
+  </script>
+</body>
+</html>

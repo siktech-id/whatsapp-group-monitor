@@ -17,6 +17,7 @@
   "author": "Marina Glancy <marina.glancy@gmail.com>",
   "license": "MIT",
   "devDependencies": {
+    "@types/archiver": "^7.0.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
     "@types/qrcode": "^1.5.6",
@@ -30,6 +31,7 @@
     "@fastify/formbody": "^8.0.2",
     "@fastify/session": "^11.1.1",
     "@fastify/static": "^9.0.0",
+    "archiver": "^7.0.1",
     "baileys": "github:WhiskeySockets/Baileys",
     "better-sqlite3": "^12.8.0",
     "drizzle-orm": "^0.45.1",

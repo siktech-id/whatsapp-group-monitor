@@ -13,8 +13,10 @@ import { jidNormalizedUser } from 'baileys'
 import { getUser } from '../../db/queries/users.js'
 import { getUserGroupMemberships } from '../../db/queries/members.js'
 import { getUserActivityPerGroup } from '../../db/queries/activity.js'
+import { registerBackupRoutes } from './backup.js'
 
 export function registerRoutes(app: FastifyInstance) {
+  registerBackupRoutes(app)
   // --- Public: login ---
   app.get('/login', async (req, reply) => {
     if (req.session.authenticated) {

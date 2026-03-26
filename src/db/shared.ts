@@ -6,15 +6,21 @@ import { logger } from '../utils/logger.js'
 import * as schema from './schema.js'
 
 let db: ReturnType<typeof drizzle<typeof schema>>
+let sharedSqlite: InstanceType<typeof Database> | null = null
 
 export function getSharedDb() {
   if (!db) throw new Error('Shared database not initialized')
   return db
 }
 
+export function checkpointSharedDb() {
+  sharedSqlite?.pragma('wal_checkpoint(FULL)')
+}
+
 export function initSharedDb() {
   const dbPath = resolve(config.dataDir, 'monitor.db')
   const sqlite = new Database(dbPath)
+  sharedSqlite = sqlite
   sqlite.pragma('journal_mode = WAL')
 
   db = drizzle(sqlite, { schema })

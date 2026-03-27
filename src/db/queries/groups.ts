@@ -59,6 +59,11 @@ export function getGroup(jid: string): GroupRecord | null {
   return getAllGroups().find(g => g.jid === jid) ?? null
 }
 
+export function updateBotMembership(groupJid: string, membership: Group['botMembership']) {
+  const db = getAccountDb()
+  return db.update(groups).set({ botMembership: membership }).where(eq(groups.jid, groupJid)).run()
+}
+
 export function markAbsentGroupsAsNone(activeJids: string[]) {
   const db = getAccountDb()
   if (activeJids.length === 0) {

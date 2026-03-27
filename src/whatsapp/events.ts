@@ -5,6 +5,9 @@ import { handleMessagesUpsert } from './handlers/activity.js'
 import { handleMessagesReaction } from './handlers/activity-reactions.js'
 import { handleContactsUpsert, handleContactsUpdate } from './handlers/contacts.js'
 import { handleMessageReceiptUpdate } from './handlers/receipts.js'
+import { handleGroupsUpsert } from './handlers/group-join.js'
+import { handleGroupParticipantsUpdate } from './handlers/group-participants.js'
+import { handleGroupJoinRequest } from './handlers/group-join-request.js'
 import { logger } from '../utils/logger.js'
 
 export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void>) {
@@ -41,6 +44,18 @@ export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void
 
     if (events['message-receipt.update']) {
       handleMessageReceiptUpdate(events['message-receipt.update'])
+    }
+
+    if (events['groups.upsert']) {
+      handleGroupsUpsert(events['groups.upsert'], sock)
+    }
+
+    if (events['group-participants.update']) {
+      handleGroupParticipantsUpdate(events['group-participants.update'], sock)
+    }
+
+    if (events['group.join-request']) {
+      handleGroupJoinRequest(events['group.join-request'], sock)
     }
   })
 }

@@ -4,7 +4,7 @@ import { getAccountDb } from '../account.js'
 import { groupMembers, users, groups, type MembershipLevel } from '../schema.js'
 import { upsertUser } from './users.js'
 
-function membershipFromAdmin(admin: GroupParticipant['admin']): MembershipLevel {
+export function membershipFromAdmin(admin: GroupParticipant['admin']): MembershipLevel {
   if (admin === 'superadmin') return 'superadmin'
   if (admin === 'admin') return 'admin'
   return 'participant'

@@ -4,7 +4,8 @@ import fastifyStatic from '@fastify/static'
 import fastifyCookie from '@fastify/cookie'
 import fastifySession from '@fastify/session'
 import fastifyFormbody from '@fastify/formbody'
-import { readFileSync } from 'fs'
+import fastifyMultipart from '@fastify/multipart'
+import { readFileSync, readdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
@@ -33,10 +34,21 @@ export function sendPage(reply: FastifyReply, filename: string, req?: FastifyReq
   return reply.type('text/html').send(html)
 }
 
+export function cleanupTmpUploads() {
+  const tmpDir = resolve(config.dataDir, '.tmp')
+  try {
+    for (const f of readdirSync(tmpDir)) {
+      try { unlinkSync(resolve(tmpDir, f)) } catch { /* ignore */ }
+    }
+  } catch { /* dir may not exist yet */ }
+}
+
 export async function startWebServer() {
+  cleanupTmpUploads()
   const app = Fastify({ logger: false })
 
   await app.register(fastifyFormbody)
+  await app.register(fastifyMultipart, { limits: { fileSize: 200 * 1024 * 1024 } })
   await app.register(fastifyCookie)
   await app.register(fastifySession, {
     secret: config.sessionSecret,

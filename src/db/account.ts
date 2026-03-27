@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { resolve } from 'path'
-import { mkdirSync } from 'fs'
+import { mkdirSync, copyFileSync, unlinkSync } from 'fs'
 import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import * as schema from './schema.js'
@@ -125,6 +125,22 @@ export function initAccountDb(phone: string) {
   currentPhone = phone
   logger.info({ phone, path: dbPath }, 'Account database initialized')
   return db
+}
+
+export function replaceAccountDbFile(phone: string, srcPath: string) {
+  const wasCurrentPhone = currentPhone === phone
+  if (wasCurrentPhone) closeAccountDb()
+
+  const accountDir = resolve(config.dataDir, phone)
+  mkdirSync(accountDir, { recursive: true })
+  const targetPath = resolve(accountDir, 'account.db')
+
+  for (const ext of ['', '-wal', '-shm']) {
+    try { unlinkSync(targetPath + ext) } catch { /* ignore */ }
+  }
+  copyFileSync(srcPath, targetPath)
+
+  if (wasCurrentPhone) initAccountDb(phone)
 }
 
 export function closeAccountDb() {

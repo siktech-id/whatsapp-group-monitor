@@ -22,7 +22,7 @@
     .item { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
     .item label { color: #1a1a1a; font-size: 0.95rem; cursor: pointer; }
     .item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #25d366; }
-    .download-btn {
+    .action-btn {
       margin-top: 1.5rem;
       padding: 0.6rem 1.5rem;
       background: #25d366;
@@ -32,9 +32,33 @@
       font-size: 0.95rem;
       cursor: pointer;
     }
-    .download-btn:hover { background: #1da851; }
-    .download-btn:disabled { background: #aaa; cursor: default; }
-    .loading { color: #667781; font-size: 0.9rem; }
+    .action-btn:hover { background: #1da851; }
+    .action-btn:disabled { background: #aaa; cursor: default; }
+    .muted { color: #667781; font-size: 0.9rem; }
+    .restore-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid #f0f2f5;
+      gap: 1rem;
+    }
+    .restore-item:last-of-type { border-bottom: none; }
+    .restore-item span { color: #1a1a1a; font-size: 0.95rem; }
+    .restore-item select {
+      padding: 0.3rem 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      color: #1a1a1a;
+      background: white;
+      cursor: pointer;
+    }
+    .restore-item select:focus { outline: none; border-color: #25d366; }
+    .result-ok { color: #25d366; font-size: 0.9rem; margin-top: 0.5rem; }
+    .result-err { color: #e74c3c; font-size: 0.9rem; margin-top: 0.5rem; }
+    .file-row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+    .file-row input[type="file"] { font-size: 0.9rem; color: #667781; flex: 1; min-width: 0; }
   </style>
 </head>
 <body>
@@ -42,35 +66,165 @@
   <div class="content">
     {{> status-bar}}
     <a class="back" href="/" id="back-link">&larr; Back to groups</a>
+
     <div class="backup-box">
       <h2>Backup</h2>
-      <form id="form" method="POST" action="/backup/download">
-        <input type="hidden" name="_csrf" id="csrf-field" value="{{CSRF_TOKEN}}" />
-        <div id="items"><p class="loading">Loading...</p></div>
-        <button type="submit" class="download-btn" id="download-btn" disabled>Download backup</button>
+      <form id="download-form" method="POST" action="/backup/download">
+        <input type="hidden" name="_csrf" value="{{CSRF_TOKEN}}" />
+        <div id="download-items"><p class="muted">Loading...</p></div>
+        <button type="submit" class="action-btn" id="download-btn" disabled>Download backup</button>
       </form>
     </div>
+
+    <div class="backup-box">
+      <h2>Restore</h2>
+      <div id="upload-section">
+        <div class="file-row">
+          <input type="file" id="zip-input" accept=".zip" onchange="onFileSelected()" />
+          <button class="action-btn" id="analyze-btn" onclick="analyzeBackup()" disabled style="margin-top:0">Analyze</button>
+        </div>
+        <p class="muted" id="upload-status" style="margin:0.75rem 0 0"></p>
+      </div>
+      <div id="analysis-section" style="display:none; margin-top:1.25rem">
+        <div id="analysis-items"></div>
+        <button class="action-btn" id="restore-btn" onclick="restoreBackup()">Restore selected</button>
+        <div id="restore-result"></div>
+      </div>
+    </div>
   </div>
+
   <script>
-    async function loadItems() {
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    let uploadToken = null;
+
+    // --- Download section ---
+    async function loadDownloadItems() {
       try {
         const res = await fetch('/api/backup/items');
         if (res.status === 401) { window.location.href = '/login'; return; }
         const data = await res.json();
-        const container = document.getElementById('items');
+        const container = document.getElementById('download-items');
         if (!data.items || data.items.length === 0) {
-          container.innerHTML = '<p class="loading">No items to backup</p>';
+          container.innerHTML = '<p class="muted">No items to backup</p>';
           return;
         }
         container.innerHTML = data.items.map(item =>
           `<div class="item">
-            <input type="checkbox" name="items" id="item-${item.id}" value="${escAttr(item.id)}" checked>
-            <label for="item-${item.id}">${escHtml(item.label)}</label>
+            <input type="checkbox" name="items" id="dl-${escAttr(item.id)}" value="${escAttr(item.id)}" checked>
+            <label for="dl-${escAttr(item.id)}">${escHtml(item.label)}</label>
           </div>`
         ).join('');
         document.getElementById('download-btn').disabled = false;
       } catch {
-        document.getElementById('items').innerHTML = '<p class="loading">Failed to load</p>';
+        document.getElementById('download-items').innerHTML = '<p class="muted">Failed to load</p>';
+      }
+    }
+
+    // --- Restore section ---
+    function onFileSelected() {
+      document.getElementById('analyze-btn').disabled = !document.getElementById('zip-input').files.length;
+      document.getElementById('analysis-section').style.display = 'none';
+      document.getElementById('upload-status').textContent = '';
+      uploadToken = null;
+    }
+
+    async function analyzeBackup() {
+      const file = document.getElementById('zip-input').files[0];
+      if (!file) return;
+
+      const btn = document.getElementById('analyze-btn');
+      btn.disabled = true;
+      document.getElementById('upload-status').textContent = 'Uploading...';
+      document.getElementById('analysis-section').style.display = 'none';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/backup/upload', {
+          method: 'POST',
+          headers: { 'x-csrf-token': csrf },
+          body: formData,
+        });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('upload-status').textContent = data.error || 'Upload failed';
+          btn.disabled = false;
+          return;
+        }
+
+        uploadToken = data.token;
+        document.getElementById('upload-status').textContent = '';
+        renderAnalysis(data.items);
+      } catch {
+        document.getElementById('upload-status').textContent = 'Upload failed';
+        btn.disabled = false;
+      }
+    }
+
+    function renderAnalysis(items) {
+      if (!items || items.length === 0) {
+        document.getElementById('upload-status').textContent = 'No recognizable items found in this backup.';
+        document.getElementById('analyze-btn').disabled = false;
+        return;
+      }
+
+      const html = items.map(item => {
+        let options;
+        if (item.id === 'settings') {
+          options = `<option value="overwrite" selected>overwrite</option><option value="ignore">ignore</option>`;
+        } else if (item.hasExisting) {
+          options = `<option value="merge" selected>merge</option><option value="overwrite">overwrite</option><option value="ignore">ignore</option>`;
+        } else {
+          options = `<option value="import" selected>import</option><option value="ignore">ignore</option>`;
+        }
+        return `<div class="restore-item">
+          <span>${escHtml(item.label)}</span>
+          <select name="action" data-id="${escAttr(item.id)}">${options}</select>
+        </div>`;
+      }).join('');
+
+      document.getElementById('analysis-items').innerHTML = html;
+      document.getElementById('restore-result').innerHTML = '';
+      document.getElementById('restore-btn').disabled = false;
+      document.getElementById('analysis-section').style.display = '';
+      document.getElementById('analyze-btn').disabled = false;
+    }
+
+    async function restoreBackup() {
+      if (!uploadToken) return;
+
+      const choices = {};
+      document.querySelectorAll('#analysis-items select[data-id]').forEach(sel => {
+        choices[sel.dataset.id] = sel.value;
+      });
+
+      const btn = document.getElementById('restore-btn');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/backup/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+          body: JSON.stringify({ token: uploadToken, choices }),
+        });
+        const data = await res.json();
+        const resultEl = document.getElementById('restore-result');
+        if (res.ok && data.ok) {
+          const lines = data.details.length
+            ? data.details.map(d => escHtml(d)).join('<br>')
+            : 'Nothing was restored (all items ignored).';
+          resultEl.innerHTML = `<div class="result-ok">${lines}</div>`;
+          uploadToken = null;
+          document.getElementById('zip-input').value = '';
+          document.getElementById('analyze-btn').disabled = true;
+        } else {
+          resultEl.innerHTML = `<div class="result-err">${escHtml(data.error || 'Restore failed')}</div>`;
+          btn.disabled = false;
+        }
+      } catch {
+        document.getElementById('restore-result').innerHTML = '<div class="result-err">Restore failed</div>';
+        btn.disabled = false;
       }
     }
 
@@ -81,7 +235,7 @@
       if (e.detail !== 'open') document.getElementById('back-link').textContent = '\u2190 Back';
     });
 
-    loadItems();
+    loadDownloadItems();
   </script>
 </body>
 </html>

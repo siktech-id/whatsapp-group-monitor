@@ -62,6 +62,27 @@ npm run dev
 
 Additional settings (project name, page size) are configurable from the Settings page.
 
+## How It Works
+
+When you use web.whatsapp.com, you link your WhatsApp account to the browser by scanning a QR code. Through WhatsApp Web you can send and receive messages and do pretty much everything you can do in the mobile app. Baileys is a library that **reverse-engineered the WhatsApp Web protocol**, allowing us to connect to WhatsApp as if we were a browser. This means we can track all the same events and data that WhatsApp Web has access to, including group activity.
+
+Similarly, you need to **connect** the monitor to your WhatsApp account by scanning a QR code. WhatsApp allows up to 4 linked devices at a time. Once connected, the session credentials are saved to your data directory. After that, you can stop the container and restart it without needing to scan the QR code again.
+
+If you restart the container while it was connected, the WhatsApp protocol will re-send all events that occurred while the monitor was offline. You can even restart after several days and catch up on everything you missed.
+
+## Backup, Restore, and Migration
+
+You can back up your data at any time.
+
+Here is the recommended workflow for **migrating** your monitor to a new server or instance (local ↔ Docker ↔ Railway):
+- Keep the old instance running and connected to WhatsApp.
+- Start the new instance and connect it to WhatsApp by scanning the QR code. Both instances are now connected and tracking the same data in parallel (WhatsApp allows up to 4 linked devices).
+- Use the backup feature on the old instance to download a backup file.
+- Use the restore feature on the new instance to upload the backup file and apply it using the **merge** option.
+- Disconnect the old instance from WhatsApp (unlink the device) and stop it.
+
+Any events that occurred after the backup was taken but before the restore will already be present in the new instance, so no data will be lost.
+
 ## Data Isolation
 
 Each WhatsApp account gets its own database at `data/{phone}/account.db`. Disconnecting and connecting a different number creates a separate database — no data mixing between accounts. Shared settings are stored in `data/monitor.db`.

@@ -129,7 +129,7 @@
       html += '<th class="num">Reactions</th>';
       html += '<th class="num">Activity</th>';
       html += '<th>Last activity</th>';
-      html += '<th>Last read</th>';
+      html += '<th>Last read <span class="info-icon" title="Only records when a member reads a message sent by the connected account, and only if they have read receipts enabled">\u24d8</span></th>';
       html += '</tr></thead><tbody>';
 
       let rowIdx = 0;
@@ -218,5 +218,6 @@
 
     loadUser();
   </script>
+  <script src="/static/shared.js"></script>
 </body>
 </html>

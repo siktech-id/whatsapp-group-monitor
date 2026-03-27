@@ -103,7 +103,7 @@
       { key: 'reactions', label: 'Reactions', num: true },
       { key: 'total', label: 'Activity', num: true },
       { key: 'lastActivity', label: 'Last activity', num: false },
-      { key: 'lastReadAt', label: 'Last read', num: false },
+      { key: 'lastReadAt', label: 'Last read <span class="info-icon" title="Only records when a member reads a message sent by the connected account, and only if they have read receipts enabled">\u24d8</span>', num: false },
     ];
 
     async function loadGroup() {
@@ -225,5 +225,6 @@
     function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     loadGroup();
   </script>
+  <script src="/static/shared.js"></script>
 </body>
 </html>

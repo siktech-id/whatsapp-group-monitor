@@ -75,3 +75,16 @@ export const groupActivityLog = sqliteTable('group_activity_log', {
 })
 
 export type GroupActivityRow = typeof groupActivityLog.$inferSelect
+
+export const outgoingMessages = sqliteTable('outgoing_messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  recipient: text('recipient').notNull(),
+  text: text('text').notNull(),
+  status: text('status', { enum: ['pending', 'sent', 'failed'] }).notNull().default('pending'),
+  whatsappMessageId: text('whatsapp_message_id'),
+  error: text('error'),
+  sentAt: integer('sent_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+})
+
+export type OutgoingMessage = typeof outgoingMessages.$inferSelect

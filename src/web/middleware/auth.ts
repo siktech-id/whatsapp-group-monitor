@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import crypto from 'crypto'
+import { config } from '../../config.js'
 
 declare module 'fastify' {
   interface Session {
@@ -17,6 +18,13 @@ export async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
 export async function requireAuthApi(req: FastifyRequest, reply: FastifyReply) {
   if (!req.session.authenticated) {
     return reply.status(401).send({ error: 'Unauthorized' })
+  }
+}
+
+export async function requireApiKey(req: FastifyRequest, reply: FastifyReply) {
+  const apiKey = req.headers['x-api-key'] as string | undefined
+  if (!apiKey || apiKey !== config.apiKey) {
+    return reply.status(401).send({ error: 'Unauthorized: Invalid or missing API key' })
   }
 }
 

@@ -100,6 +100,19 @@ export function initAccountDb(phone: string) {
     CREATE INDEX IF NOT EXISTS idx_activity_group_ts ON group_activity_log(group_jid, timestamp);
     CREATE INDEX IF NOT EXISTS idx_activity_user_group ON group_activity_log(user_jid, group_jid);
     CREATE INDEX IF NOT EXISTS idx_activity_parent ON group_activity_log(parent_id);
+
+    CREATE TABLE IF NOT EXISTS outgoing_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipient TEXT NOT NULL,
+      text TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      whatsapp_message_id TEXT,
+      error TEXT,
+      sent_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_outgoing_recipient ON outgoing_messages(recipient);
   `)
 
   // Migrations: drop columns that are no longer needed

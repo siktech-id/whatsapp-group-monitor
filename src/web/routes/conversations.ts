@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify'
+import { jidNormalizedUser } from 'baileys'
 import { isAccountDbReady } from '../../db/account.js'
 import { requireApiKeyOrSession } from '../middleware/auth.js'
 import { getAllGroups } from '../../db/queries/groups.js'
 import { getUser } from '../../db/queries/users.js'
-import { getDistinctDmRecipients, getLastOutgoingPerRecipient, getGroupMessages, getOutgoingMessagesByRecipient, getIncomingMessagesBySender, getDistinctDmSenders } from '../../db/queries/conversations.js'
+import { getDistinctDmRecipients, getLastOutgoingPerRecipient, getGroupMessages, getOutgoingMessagesByRecipient, getIncomingMessagesBySender, getDistinctDmSenders, getLastIncomingPerSender } from '../../db/queries/conversations.js'
 import { GroupRecord } from '../../whatsapp/group/record.js'
+import { getSock } from '../../whatsapp/client.js'
 import { logger } from '../../utils/logger.js'
 
 function isGroupId(id: string): boolean {
@@ -48,21 +50,67 @@ export function registerConversationRoutes(app: FastifyInstance) {
       }
 
       try {
-        // DMs
+        // DMs - combine both outgoing recipients and incoming senders
         const dmRecipients = await getDistinctDmRecipients()
+        const dmSenders = await getDistinctDmSenders()
         const lastOutgoing = await getLastOutgoingPerRecipient()
+        const lastIncoming = await getLastIncomingPerSender()
 
+        const dmMap = new Map<string, any>()
+
+        // Add outgoing DMs
         for (const { recipient } of dmRecipients) {
           const user = await getUser(recipient)
           const lastMsg = lastOutgoing.get(recipient)
 
-          conversations.push({
+          dmMap.set(recipient, {
             id: recipient,
             type: 'dm',
-            name: user?.displayName || user?.phoneNumber || recipient.replace('@s.whatsapp.net', ''),
+            name: user?.displayName || user?.phoneNumber || recipient.replace('@s.whatsapp.net', '').replace('@lid', ''),
             lastMessageText: lastMsg?.text || null,
             lastMessageAt: lastMsg?.sentAt ? lastMsg.sentAt.toISOString() : null,
             lastMessageStatus: lastMsg?.status || null,
+            lastMessageTime: lastMsg?.sentAt ? lastMsg.sentAt.getTime() : 0,
+          })
+        }
+
+        // Add or update incoming DMs
+        for (const { senderJid } of dmSenders) {
+          const user = await getUser(senderJid)
+          const lastMsg = lastIncoming.get(senderJid)
+          const lastMessageTime = lastMsg?.receivedAt ? lastMsg.receivedAt.getTime() : 0
+
+          if (dmMap.has(senderJid)) {
+            // Update if we have newer incoming message
+            const existing = dmMap.get(senderJid)
+            if (lastMessageTime > (existing.lastMessageTime || 0)) {
+              existing.lastMessageText = lastMsg?.text || null
+              existing.lastMessageAt = lastMsg?.receivedAt ? lastMsg.receivedAt.toISOString() : null
+              existing.lastMessageStatus = 'received'
+            }
+          } else {
+            // Add new incoming DM sender
+            dmMap.set(senderJid, {
+              id: senderJid,
+              type: 'dm',
+              name: user?.displayName || user?.phoneNumber || senderJid.replace('@s.whatsapp.net', '').replace('@lid', ''),
+              lastMessageText: lastMsg?.text || null,
+              lastMessageAt: lastMsg?.receivedAt ? lastMsg.receivedAt.toISOString() : null,
+              lastMessageStatus: 'received',
+              lastMessageTime,
+            })
+          }
+        }
+
+        // Add all DMs to conversations
+        for (const dm of dmMap.values()) {
+          conversations.push({
+            id: dm.id,
+            type: dm.type,
+            name: dm.name,
+            lastMessageText: dm.lastMessageText,
+            lastMessageAt: dm.lastMessageAt,
+            lastMessageStatus: dm.lastMessageStatus,
           })
         }
       } catch (err) {
@@ -111,6 +159,15 @@ export function registerConversationRoutes(app: FastifyInstance) {
           const messages = await getGroupMessages(id, opts)
           const userCache = new Map<string, any>()
 
+          let botUserJid: string | null = null
+          try {
+            const sock = getSock()
+            if (sock.user?.lid) botUserJid = jidNormalizedUser(sock.user.lid)
+            else if (sock.user?.id) botUserJid = jidNormalizedUser(sock.user.id)
+          } catch {
+            // not connected, will be null
+          }
+
           const enrichedMessages = await Promise.all(messages.map(async msg => {
             let senderName = msg.userJid
 
@@ -137,6 +194,7 @@ export function registerConversationRoutes(app: FastifyInstance) {
               text: (msg.metadata as any)?.text || null,
               timestamp: msg.timestamp,
               eventType: msg.eventType,
+              isBot: botUserJid ? msg.userJid === botUserJid : false,
             }
           }))
 
@@ -147,6 +205,7 @@ export function registerConversationRoutes(app: FastifyInstance) {
             type: 'group',
             messages: enrichedMessages,
             nextCursor,
+            botUserJid,
           })
         } catch (err) {
           logger.error({ error: err, groupJid: id }, 'Error loading group messages')

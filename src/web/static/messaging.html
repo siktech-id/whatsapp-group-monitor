@@ -471,18 +471,20 @@
           let senderName = 'You';
           let text = msg.text;
           let time = '';
+          let isOutgoing = false;
 
           if (data.type === 'group') {
-            senderName = msg.senderName || msg.senderJid.substring(0, 15);
+            senderName = msg.isBot ? 'You' : (msg.senderName || msg.senderJid.substring(0, 15));
+            isOutgoing = msg.isBot;
             time = new Date(msg.timestamp * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
           } else {
             // For DMs, sender name is always 'You' for outgoing, 'Them' for incoming
             senderName = msg.direction === 'outgoing' ? 'You' : 'Them';
+            isOutgoing = msg.direction === 'outgoing';
             const tsDate = typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : new Date(msg.timestamp);
             time = tsDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
           }
 
-          const isOutgoing = msg.direction === 'outgoing';
           const bubbleClass = isOutgoing ? 'msg-out' : 'msg-in';
 
           return `<div class="msg-bubble ${bubbleClass}">

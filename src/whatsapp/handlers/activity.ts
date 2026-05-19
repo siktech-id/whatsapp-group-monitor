@@ -1,7 +1,7 @@
 import type { BaileysEventMap } from 'baileys'
 import { logger } from '../../utils/logger.js'
 import { isAccountDbReady } from '../../db/account.js'
-import { updateDisplayName } from '../../db/queries/users.js'
+import { upsertUser } from '../../db/queries/users.js'
 import { insertIncomingMessage } from '../../db/queries/conversations.js'
 import { cacheMessage } from '../client.js'
 import { ActivityRecord } from '../activity/record.js'
@@ -42,7 +42,7 @@ async function handleGroupMessage(msg: any, groupJid: string) {
   if (!record) return
 
   if (msg.pushName && record.userJid) {
-    await updateDisplayName(record.userJid, msg.pushName)
+    await upsertUser(record.userJid, { displayName: msg.pushName })
   }
 
   await record.saveAndProcess()
@@ -67,10 +67,8 @@ async function handleDmMessage(msg: any, senderJid: string) {
     return
   }
 
-  // Update sender display name if available
-  if (msg.pushName) {
-    await updateDisplayName(senderJid, msg.pushName)
-  }
+  // Create user row with display name if available
+  await upsertUser(senderJid, { displayName: msg.pushName || undefined })
 
   // Store incoming message
   const timestamp = typeof msg.messageTimestamp === 'number'

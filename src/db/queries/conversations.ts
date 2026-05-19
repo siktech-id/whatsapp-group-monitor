@@ -1,6 +1,6 @@
 import { getAccountDb } from '../account.js'
 import { outgoingMessages, incomingMessages, groupActivityLog } from '../schema.js'
-import { eq, and, desc, lt, like, sql, max } from 'drizzle-orm'
+import { eq, and, desc, asc, lt, like, sql, max } from 'drizzle-orm'
 import type { OutgoingMessage, IncomingMessage, GroupActivityRow } from '../schema.js'
 
 export async function getDistinctDmRecipients(): Promise<{ recipient: string }[]> {
@@ -69,7 +69,7 @@ export async function getGroupMessages(
     .select()
     .from(groupActivityLog)
     .where(and(...conditions))
-    .orderBy(desc(groupActivityLog.timestamp))
+    .orderBy(asc(groupActivityLog.timestamp))
     .limit(opts.limit)
 }
 
@@ -126,6 +126,33 @@ export async function getDistinctDmSenders(): Promise<{ senderJid: string }[]> {
     }
   }
   return result
+}
+
+export async function getLastIncomingPerSender(): Promise<Map<string, { text: string; receivedAt: Date | null }>> {
+  const db = getAccountDb()
+  const subquery = db
+    .select({ maxId: max(incomingMessages.id).as('max_id') })
+    .from(incomingMessages)
+    .groupBy(incomingMessages.senderJid)
+    .as('sub')
+
+  const rows = await db
+    .select({
+      senderJid: incomingMessages.senderJid,
+      text: incomingMessages.text,
+      receivedAt: incomingMessages.receivedAt,
+    })
+    .from(incomingMessages)
+    .innerJoin(subquery, eq(incomingMessages.id, subquery.maxId))
+
+  const map = new Map<string, { text: string; receivedAt: Date | null }>()
+  for (const row of rows) {
+    map.set(row.senderJid, {
+      text: row.text,
+      receivedAt: row.receivedAt,
+    })
+  }
+  return map
 }
 
 export async function insertIncomingMessage(senderJid: string, text: string, whatsappMessageId: string, receivedAt: number): Promise<void> {

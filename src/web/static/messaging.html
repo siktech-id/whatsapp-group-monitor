@@ -476,10 +476,13 @@
             senderName = msg.senderName || msg.senderJid.substring(0, 15);
             time = new Date(msg.timestamp * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
           } else {
-            time = new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            // For DMs, sender name is always 'You' for outgoing, 'Them' for incoming
+            senderName = msg.direction === 'outgoing' ? 'You' : 'Them';
+            const tsDate = typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : new Date(msg.timestamp);
+            time = tsDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
           }
 
-          const isOutgoing = data.type === 'group' ? msg.direction === 'outgoing' : msg.direction === 'outgoing';
+          const isOutgoing = msg.direction === 'outgoing';
           const bubbleClass = isOutgoing ? 'msg-out' : 'msg-in';
 
           return `<div class="msg-bubble ${bubbleClass}">

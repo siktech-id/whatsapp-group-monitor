@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js'
 
 export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void>) {
   sock.ev.process(async (events) => {
+
     if (events['connection.update']) {
       await handleConnectionUpdate(events['connection.update'], sock.user)
 

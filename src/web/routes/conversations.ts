@@ -12,7 +12,7 @@ function isGroupId(id: string): boolean {
 }
 
 function isDmId(id: string): boolean {
-  return id.endsWith('@s.whatsapp.net')
+  return id.endsWith('@s.whatsapp.net') || id.endsWith('@lid')
 }
 
 export function registerConversationRoutes(app: FastifyInstance) {
@@ -170,7 +170,7 @@ export function registerConversationRoutes(app: FastifyInstance) {
           const outgoing = await getOutgoingMessagesByRecipient(id, opts)
           const incoming = await getIncomingMessagesBySender(id, opts)
 
-          // Combine and sort by timestamp (ascending: oldest first)
+          // Combine outgoing and incoming messages (no echoes since handleDmMessage skips fromMe)
           const allMessages = [
             ...outgoing.map(msg => ({
               id: msg.id,

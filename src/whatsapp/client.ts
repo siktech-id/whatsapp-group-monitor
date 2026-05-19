@@ -81,6 +81,13 @@ async function getMessage(key: WAMessageKey) {
   return undefined
 }
 
+export async function reconnect(): Promise<void> {
+  if (sock) {
+    logger.info('Triggering reconnect')
+    await sock.logout()
+  }
+}
+
 export async function startConnection(): Promise<void> {
   const { state, saveCreds } = await initAuthState()
   const { version } = await fetchLatestBaileysVersion()

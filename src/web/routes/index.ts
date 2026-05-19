@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { config } from '../../config.js'
 import { sendPage } from '../server.js'
 import { getCurrentQr, getConnectionState, getBotUser } from '../../whatsapp/handlers/connection.js'
-import { getSock } from '../../whatsapp/client.js'
+import { getSock, reconnect } from '../../whatsapp/client.js'
 import { requireAuth, requireAuthApi, requireApiKeyOrSession, generateCsrf, verifyCsrf } from '../middleware/auth.js'
 import { getSettingOrDefault, setSetting } from '../../db/queries/settings.js'
 import { getAllGroups, getGroup } from '../../db/queries/groups.js'
@@ -78,6 +78,18 @@ export function registerRoutes(app: FastifyInstance) {
       // not connected
     }
     return reply.redirect('/')
+  })
+
+  app.post('/reconnect', { preHandler: requireAuth }, async (req, reply) => {
+    if (!verifyCsrf(req)) {
+      return reply.status(403).send('Invalid CSRF token')
+    }
+    try {
+      await reconnect()
+      return reply.send({ ok: true, message: 'Reconnecting to WhatsApp...' })
+    } catch (err) {
+      return reply.status(500).send({ error: 'Failed to reconnect' })
+    }
   })
 
   // --- Protected: settings ---

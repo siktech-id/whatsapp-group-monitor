@@ -15,5 +15,7 @@ export const config = {
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || '',
   sessionSecret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
-  apiKey: process.env.API_KEY || 'dev-key-change-in-production',
+  get apiKey() {
+    return process.env.API_KEY || 'dev-key-change-in-production'
+  },
 }

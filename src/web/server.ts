@@ -24,13 +24,15 @@ function resolvePartials(html: string): string {
   })
 }
 
-export function sendPage(reply: FastifyReply, filename: string, req?: FastifyRequest) {
+export async function sendPage(reply: FastifyReply, filename: string, req?: FastifyRequest) {
   const csrfToken = req?.session?.csrfToken || ''
+  const projectName = await getSettingOrDefault('project_name', 'WhatsApp Group Monitor')
+  const pageSize = await getSettingOrDefault('page_size', '50')
   const html = resolvePartials(readFileSync(resolve(staticDir, filename), 'utf-8'))
-    .replaceAll('{{PROJECT_NAME}}', getSettingOrDefault('project_name', 'WhatsApp Group Monitor'))
+    .replaceAll('{{PROJECT_NAME}}', projectName)
     .replaceAll('{{CSRF_TOKEN}}', csrfToken)
     .replaceAll('{{ADMIN_USERNAME}}', config.adminUsername)
-    .replaceAll('{{PAGE_SIZE}}', getSettingOrDefault('page_size', '50'))
+    .replaceAll('{{PAGE_SIZE}}', pageSize)
   return reply.type('text/html').send(html)
 }
 

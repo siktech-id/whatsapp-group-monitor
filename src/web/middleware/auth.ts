@@ -28,6 +28,16 @@ export async function requireApiKey(req: FastifyRequest, reply: FastifyReply) {
   }
 }
 
+export async function requireApiKeyOrSession(req: FastifyRequest, reply: FastifyReply) {
+  const apiKey = req.headers['x-api-key'] as string | undefined
+
+  if (apiKey) {
+    await requireApiKey(req, reply)
+  } else {
+    await requireAuthApi(req, reply)
+  }
+}
+
 /** Generate a CSRF token if not present, return it */
 export function generateCsrf(req: FastifyRequest): string {
   if (!req.session.csrfToken) {

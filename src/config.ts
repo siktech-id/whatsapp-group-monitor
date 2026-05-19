@@ -6,6 +6,9 @@ export const config = {
   get authDir() {
     return resolve(this.dataDir, 'auth')
   },
+  get databaseUrl() {
+    return process.env.DATABASE_URL || 'postgresql://localhost:5432/beesa_wa'
+  },
   port: parseInt(process.env.PORT || '3000', 10),
   host: process.env.HOST || '0.0.0.0',
   logLevel: (process.env.LOG_LEVEL || 'info') as 'debug' | 'info' | 'warn' | 'error',

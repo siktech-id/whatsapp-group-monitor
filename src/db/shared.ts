@@ -1,38 +1,39 @@
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { resolve } from 'path'
+import { Pool } from 'pg'
+import { drizzle } from 'drizzle-orm/node-postgres'
 import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import * as schema from './schema.js'
 
-let db: ReturnType<typeof drizzle<typeof schema>>
-let sharedSqlite: InstanceType<typeof Database> | null = null
+let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 
 export function getSharedDb() {
   if (!db) throw new Error('Shared database not initialized')
   return db
 }
 
-export function checkpointSharedDb() {
-  sharedSqlite?.pragma('wal_checkpoint(FULL)')
-}
+export async function initSharedDb() {
+  const pool = new Pool({ connectionString: config.databaseUrl })
 
-export function initSharedDb() {
-  const dbPath = resolve(config.dataDir, 'monitor.db')
-  const sqlite = new Database(dbPath)
-  sharedSqlite = sqlite
-  sqlite.pragma('journal_mode = WAL')
+  db = drizzle(pool, { schema })
 
-  db = drizzle(sqlite, { schema })
+  try {
+    // Ensure shared schema exists
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS shared`)
 
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-  `)
+    // Ensure settings table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS shared.settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
+    `)
 
-  logger.info({ path: dbPath }, 'Shared database initialized')
+    logger.info('Shared database initialized')
+  } catch (err) {
+    logger.error({ error: err }, 'Failed to initialize shared database')
+    throw err
+  }
+
   return db
 }

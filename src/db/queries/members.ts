@@ -10,7 +10,7 @@ export function membershipFromAdmin(admin: GroupParticipant['admin']): Membershi
   return 'participant'
 }
 
-export function getUserGroupMemberships(userJid: string) {
+export async function getUserGroupMemberships(userJid: string) {
   const db = getAccountDb()
   return db.select({
     groupJid: groupMembers.groupJid,
@@ -25,28 +25,26 @@ export function getUserGroupMemberships(userJid: string) {
     .from(groupMembers)
     .innerJoin(groups, eq(groupMembers.groupJid, groups.jid))
     .where(eq(groupMembers.userJid, userJid))
-    .all()
 }
 
-export function updateLastReadAt(groupJid: string, userJid: string, date: string) {
+export async function updateLastReadAt(groupJid: string, userJid: string, date: string) {
   const db = getAccountDb()
-  db.update(groupMembers)
+  await db.update(groupMembers)
     .set({ lastReadAt: date })
     .where(and(
       eq(groupMembers.groupJid, groupJid),
       eq(groupMembers.userJid, userJid),
       or(isNull(groupMembers.lastReadAt), lt(groupMembers.lastReadAt, date)),
     ))
-    .run()
 }
 
-export function upsertMembership(groupJid: string, userJid: string, membership: MembershipLevel) {
+export async function upsertMembership(groupJid: string, userJid: string, membership: MembershipLevel) {
   const db = getAccountDb()
   const now = new Date()
   const isLeaving = membership === 'none'
   const isJoining = membership !== 'none' && membership !== 'pending_approval'
 
-  return db.insert(groupMembers).values({
+  await db.insert(groupMembers).values({
     groupJid,
     userJid,
     membership,
@@ -61,27 +59,27 @@ export function upsertMembership(groupJid: string, userJid: string, membership: 
       ...(isJoining ? { joinedAt: now, leftAt: null } : {}),
       updatedAt: now,
     },
-  }).run()
+  })
 }
 
-export function syncGroupParticipants(groupJid: string, participants: GroupParticipant[]) {
+export async function syncGroupParticipants(groupJid: string, participants: GroupParticipant[]) {
   const db = getAccountDb()
   const activeUserJids: string[] = []
 
-  db.transaction(() => {
+  await db.transaction(async (tx) => {
     for (const p of participants) {
-      upsertUser(p.id, {
+      await upsertUser(p.id, {
         phoneNumber: p.phoneNumber || undefined,
         displayName: p.notify || undefined,
       })
       const membership = membershipFromAdmin(p.admin)
-      upsertMembership(groupJid, p.id, membership)
+      await upsertMembership(groupJid, p.id, membership)
       activeUserJids.push(p.id)
     }
 
     if (activeUserJids.length > 0) {
       const now = new Date()
-      db.update(groupMembers)
+      await tx.update(groupMembers)
         .set({ membership: 'none', leftAt: now, updatedAt: now })
         .where(
           and(
@@ -89,12 +87,11 @@ export function syncGroupParticipants(groupJid: string, participants: GroupParti
             notInArray(groupMembers.userJid, activeUserJids),
           )
         )
-        .run()
     }
   })
 }
 
-export function getGroupMembers(groupJid: string, opts?: { includeLeft?: boolean }) {
+export async function getGroupMembers(groupJid: string, opts?: { includeLeft?: boolean }) {
   const db = getAccountDb()
   const conditions = [eq(groupMembers.groupJid, groupJid)]
   if (!opts?.includeLeft) {
@@ -113,14 +110,12 @@ export function getGroupMembers(groupJid: string, opts?: { includeLeft?: boolean
     .from(groupMembers)
     .innerJoin(users, eq(groupMembers.userJid, users.jid))
     .where(and(...conditions))
-    .all()
 }
 
-/** Count distinct active members across multiple groups (for communities) */
-export function getDistinctMemberCount(groupJids: string[]): number {
+export async function getDistinctMemberCount(groupJids: string[]): Promise<number> {
   if (groupJids.length === 0) return 0
   const db = getAccountDb()
-  const row = db.select({
+  const rows = await db.select({
     cnt: sql<number>`count(distinct ${groupMembers.userJid})`.as('cnt'),
   })
     .from(groupMembers)
@@ -128,12 +123,10 @@ export function getDistinctMemberCount(groupJids: string[]): number {
       inArray(groupMembers.groupJid, groupJids),
       notInArray(groupMembers.membership, ['none']),
     ))
-    .get()
-  return row?.cnt ?? 0
+  return rows[0]?.cnt ?? 0
 }
 
-/** Get distinct members across multiple groups with highest membership level */
-export function getDistinctMembers(groupJids: string[], opts?: { includeLeft?: boolean }) {
+export async function getDistinctMembers(groupJids: string[], opts?: { includeLeft?: boolean }) {
   if (groupJids.length === 0) return []
   const db = getAccountDb()
   const conditions = [inArray(groupMembers.groupJid, groupJids)]
@@ -166,15 +159,14 @@ export function getDistinctMembers(groupJids: string[], opts?: { includeLeft?: b
     .innerJoin(users, eq(groupMembers.userJid, users.jid))
     .where(and(...conditions))
     .groupBy(groupMembers.userJid)
-    .all()
 }
 
-export function getGroupMemberCounts(groupJids: string[]): Map<string, number> {
+export async function getGroupMemberCounts(groupJids: string[]): Promise<Map<string, number>> {
   const result = new Map<string, number>()
   if (groupJids.length === 0) return result
 
   const db = getAccountDb()
-  const rows = db.select({
+  const rows = await db.select({
     groupJid: groupMembers.groupJid,
     cnt: sql<number>`count(*)`.as('cnt'),
   })
@@ -184,7 +176,6 @@ export function getGroupMemberCounts(groupJids: string[]): Map<string, number> {
       notInArray(groupMembers.membership, ['none']),
     ))
     .groupBy(groupMembers.groupJid)
-    .all()
 
   for (const row of rows) {
     result.set(row.groupJid, row.cnt)

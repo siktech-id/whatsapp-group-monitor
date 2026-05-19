@@ -3,8 +3,9 @@ import { defineConfig } from 'drizzle-kit'
 export default defineConfig({
   schema: './src/db/schema.ts',
   out: './src/db/migrations',
-  dialect: 'sqlite',
+  dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATA_DIR ? `${process.env.DATA_DIR}/monitor.db` : './data/monitor.db',
+    url: process.env.DATABASE_URL || 'postgresql://localhost:5432/beesa_wa',
   },
+  schemaFilter: ['shared', 'account'],
 })

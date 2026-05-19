@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { getSock } from '../../whatsapp/client.js'
 import { isAccountDbReady } from '../../db/account.js'
-import { requireAuthApi, requireApiKey, verifyCsrf } from '../middleware/auth.js'
+import { requireAuthApi, requireApiKey, requireApiKeyOrSession, verifyCsrf } from '../middleware/auth.js'
 import { insertOutgoingMessage, updateOutgoingMessageStatus, getRecentOutgoingMessages } from '../../db/queries/outgoing-messages.js'
 import { logger } from '../../utils/logger.js'
 
@@ -38,13 +38,13 @@ export function registerMessageRoutes(app: FastifyInstance) {
       }
 
       const normalizedRecipient = normalizeRecipient(recipient)
-      const messageId = insertOutgoingMessage(normalizedRecipient, text)
+      const messageId = await insertOutgoingMessage(normalizedRecipient, text)
 
       try {
         const sock = getSock()
         const sentMessage = await sock.sendMessage(normalizedRecipient, { text })
 
-        updateOutgoingMessageStatus(messageId, 'sent', {
+        await updateOutgoingMessageStatus(messageId, 'sent', {
           whatsappMessageId: sentMessage?.key?.id || undefined,
         })
 
@@ -52,7 +52,7 @@ export function registerMessageRoutes(app: FastifyInstance) {
         return reply.send({ ok: true, messageId, whatsappMessageId: sentMessage?.key?.id || null })
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-        updateOutgoingMessageStatus(messageId, 'failed', { error: errorMsg })
+        await updateOutgoingMessageStatus(messageId, 'failed', { error: errorMsg })
 
         logger.error({ messageId, recipient: normalizedRecipient, error: errorMsg }, 'Failed to send message')
         return reply.status(500).send({ error: 'Failed to send message', details: errorMsg })
@@ -83,13 +83,13 @@ export function registerMessageRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Message too long (max 16KB)' })
       }
 
-      const messageId = insertOutgoingMessage(jid, text)
+      const messageId = await insertOutgoingMessage(jid, text)
 
       try {
         const sock = getSock()
         const sentMessage = await sock.sendMessage(jid, { text })
 
-        updateOutgoingMessageStatus(messageId, 'sent', {
+        await updateOutgoingMessageStatus(messageId, 'sent', {
           whatsappMessageId: sentMessage?.key?.id || undefined,
         })
 
@@ -97,7 +97,7 @@ export function registerMessageRoutes(app: FastifyInstance) {
         return reply.send({ ok: true, messageId, whatsappMessageId: sentMessage?.key?.id || null })
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-        updateOutgoingMessageStatus(messageId, 'failed', { error: errorMsg })
+        await updateOutgoingMessageStatus(messageId, 'failed', { error: errorMsg })
 
         logger.error({ messageId, groupJid: jid, error: errorMsg }, 'Failed to send group message')
         return reply.status(500).send({ error: 'Failed to send message', details: errorMsg })
@@ -117,14 +117,4 @@ export function registerMessageRoutes(app: FastifyInstance) {
       return reply.send({ messages })
     }
   )
-}
-
-async function requireApiKeyOrSession(req: any, reply: any) {
-  const apiKey = req.headers['x-api-key'] as string | undefined
-
-  if (apiKey) {
-    await requireApiKey(req, reply)
-  } else {
-    await requireAuthApi(req, reply)
-  }
 }

@@ -4,7 +4,7 @@ import type { WAMessage } from 'baileys'
 import type { ActivityEventType, GroupActivityRow } from '../../db/schema.js'
 import { insertActivity } from '../../db/queries/activity.js'
 import { processRecord } from './processor.js'
-import { getSock, getEncryptionContext } from '../client.js'
+import { getSock, getCachedMessage } from '../client.js'
 
 /** Convert a value to a JSON-safe object (replace binary, bigint) */
 function safeJson(obj: unknown): unknown {
@@ -68,7 +68,7 @@ export class ActivityRecord {
   }
 
   /** Insert into group_activity_log. Returns false if duplicate. */
-  save(): boolean {
+  async save(): Promise<boolean> {
     return insertActivity(this)
   }
 
@@ -78,8 +78,8 @@ export class ActivityRecord {
   }
 
   /** Save and process. */
-  saveAndProcess(): void {
-    const inserted = this.save()
+  async saveAndProcess(): Promise<void> {
+    const inserted = await this.save()
     if (inserted) {
       this.process()
     }
@@ -180,31 +180,37 @@ export class ActivityRecord {
 
       if (pollMsgId && pollUpdate.vote) {
         try {
-          const ctx = getEncryptionContext(groupJid, pollMsgId)
-          if (ctx && pollUpdate.pollCreationMessageKey) {
+          // Note: DB fallback removed for async migration; relies on in-memory cache only
+          const cached = getCachedMessage(pollMsgId)
+          if (cached && cached.message?.messageContextInfo?.messageSecret) {
+            const secret = cached.message.messageContextInfo.messageSecret
+            const pollMsg = cached.message?.pollCreationMessage
+              || cached.message?.pollCreationMessageV2
+              || cached.message?.pollCreationMessageV3
+
             const sock = getSock()
             const meId = jidNormalizedUser(sock.user?.id || '')
             const meLid = sock.user?.lid ? jidNormalizedUser(sock.user.lid) : meId
             const isLid = msg.key.addressingMode === 'lid'
 
             const pollCreatorJid = isLid
-              ? (pollUpdate.pollCreationMessageKey.fromMe ? meLid : (pollUpdate.pollCreationMessageKey.participant || getKeyAuthor(pollUpdate.pollCreationMessageKey, meId)))
-              : getKeyAuthor(pollUpdate.pollCreationMessageKey, meId)
+              ? (pollUpdate.pollCreationMessageKey?.fromMe ? meLid : (pollUpdate.pollCreationMessageKey?.participant || getKeyAuthor(pollUpdate.pollCreationMessageKey as any, meId)))
+              : getKeyAuthor(pollUpdate.pollCreationMessageKey as any, meId)
             const voterJid = isLid
               ? (msg.key.fromMe ? meLid : (msg.key.participant || getKeyAuthor(msg.key, meId)))
               : getKeyAuthor(msg.key, meId)
 
             const result = decryptPollVote(pollUpdate.vote, {
-              pollEncKey: ctx.encKey,
+              pollEncKey: secret,
               pollCreatorJid,
               pollMsgId,
               voterJid,
             })
 
             const optionHashes = new Map<string, string>()
-            for (const optName of ctx.options || []) {
-              const hash = createHash('sha256').update(optName).digest('hex')
-              optionHashes.set(hash, optName)
+            for (const optName of (pollMsg?.options || [])) {
+              const hash = createHash('sha256').update(optName.optionName || '').digest('hex')
+              optionHashes.set(hash, optName.optionName || '')
             }
             selectedOptions = (result.selectedOptions || []).map(hash => {
               const hex = Buffer.from(hash).toString('hex')
@@ -261,9 +267,11 @@ export class ActivityRecord {
 
       if (eventMsgId && encEventResp.encPayload && encEventResp.encIv) {
         try {
-          const ctx = getEncryptionContext(groupJid, eventMsgId)
-          if (ctx && encEventResp.eventCreationMessageKey) {
-            const eventEncKey = ctx.encKey
+          // Note: DB fallback removed for async migration; relies on in-memory cache only
+          const cached = getCachedMessage(eventMsgId)
+          if (cached && cached.message?.messageContextInfo?.messageSecret && encEventResp.eventCreationMessageKey) {
+            const eventEncKey = cached.message.messageContextInfo.messageSecret
+
             const sock = getSock()
             const meId = jidNormalizedUser(sock.user?.id || '')
             const meLid = sock.user?.lid ? jidNormalizedUser(sock.user.lid) : meId

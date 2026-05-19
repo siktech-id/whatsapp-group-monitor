@@ -15,7 +15,7 @@ function botMembershipFromParticipant(p: GroupParticipant | undefined): Group['b
   return 'participant'
 }
 
-export function upsertGroupFromMetadata(meta: GroupMetadata, botJid: string, botLid?: string) {
+export async function upsertGroupFromMetadata(meta: GroupMetadata, botJid: string, botLid?: string) {
   const db = getAccountDb()
   const botPhone = bareId(botJid)
   const botLidBare = botLid ? bareId(botLid) : null
@@ -36,41 +36,41 @@ export function upsertGroupFromMetadata(meta: GroupMetadata, botJid: string, bot
       joinApprovalMode: meta.joinApprovalMode ?? false,
     },
     botMembership: botMembershipFromParticipant(botParticipant),
-    syncedAt: new Date(),
   }
 
-  return db.insert(groups).values({
+  await db.insert(groups).values({
     ...values,
     createdAt: new Date(),
   }).onConflictDoUpdate({
     target: groups.jid,
     set: values,
-  }).run()
+  })
 }
 
-export function getAllGroups(): GroupRecord[] {
+export async function getAllGroups(): Promise<GroupRecord[]> {
   const db = getAccountDb()
-  const records = db.select().from(groups).all().map(r => new GroupRecord(r))
+  const allGroups = await db.select().from(groups)
+  const records = allGroups.map(r => new GroupRecord(r))
   GroupRecord.linkAll(records)
   return records
 }
 
-export function getGroup(jid: string): GroupRecord | null {
-  return getAllGroups().find(g => g.jid === jid) ?? null
+export async function getGroup(jid: string): Promise<GroupRecord | null> {
+  const allGroups = await getAllGroups()
+  return allGroups.find(g => g.jid === jid) ?? null
 }
 
-export function updateBotMembership(groupJid: string, membership: Group['botMembership']) {
+export async function updateBotMembership(groupJid: string, membership: Group['botMembership']) {
   const db = getAccountDb()
-  return db.update(groups).set({ botMembership: membership }).where(eq(groups.jid, groupJid)).run()
+  return db.update(groups).set({ botMembership: membership }).where(eq(groups.jid, groupJid))
 }
 
-export function markAbsentGroupsAsNone(activeJids: string[]) {
+export async function markAbsentGroupsAsNone(activeJids: string[]) {
   const db = getAccountDb()
   if (activeJids.length === 0) {
-    return db.update(groups).set({ botMembership: 'none' }).run()
+    return db.update(groups).set({ botMembership: 'none' })
   }
   return db.update(groups)
     .set({ botMembership: 'none' })
     .where(notInArray(groups.jid, activeJids))
-    .run()
 }

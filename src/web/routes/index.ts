@@ -4,7 +4,7 @@ import { config } from '../../config.js'
 import { sendPage } from '../server.js'
 import { getCurrentQr, getConnectionState, getBotUser } from '../../whatsapp/handlers/connection.js'
 import { getSock } from '../../whatsapp/client.js'
-import { requireAuth, requireAuthApi, generateCsrf, verifyCsrf } from '../middleware/auth.js'
+import { requireAuth, requireAuthApi, requireApiKeyOrSession, generateCsrf, verifyCsrf } from '../middleware/auth.js'
 import { getSettingOrDefault, setSetting } from '../../db/queries/settings.js'
 import { getAllGroups, getGroup } from '../../db/queries/groups.js'
 import { GroupRecord } from '../../whatsapp/group/record.js'
@@ -15,17 +15,19 @@ import { getUserGroupMemberships } from '../../db/queries/members.js'
 import { getUserActivityPerGroup } from '../../db/queries/activity.js'
 import { registerBackupRoutes } from './backup.js'
 import { registerMessageRoutes } from './messages.js'
+import { registerConversationRoutes } from './conversations.js'
 
 export function registerRoutes(app: FastifyInstance) {
   registerBackupRoutes(app)
   registerMessageRoutes(app)
+  registerConversationRoutes(app)
   // --- Public: login ---
   app.get('/login', async (req, reply) => {
     if (req.session.authenticated) {
       return reply.redirect('/')
     }
     generateCsrf(req)
-    return sendPage(reply, 'login.html', req)
+    return await sendPage(reply, 'login.html', req)
   })
 
   app.post('/login', async (req, reply) => {
@@ -52,9 +54,9 @@ export function registerRoutes(app: FastifyInstance) {
     generateCsrf(req)
     const state = getConnectionState()
     if (state === 'open') {
-      return sendPage(reply, 'dashboard.html', req)
+      return await sendPage(reply, 'dashboard.html', req)
     }
-    return sendPage(reply, 'connection.html', req)
+    return await sendPage(reply, 'connection.html', req)
   })
 
   app.post('/logout', { preHandler: requireAuth }, async (req, reply) => {
@@ -81,17 +83,22 @@ export function registerRoutes(app: FastifyInstance) {
   // --- Protected: settings ---
   app.get('/settings', { preHandler: requireAuth }, async (req, reply) => {
     generateCsrf(req)
-    return sendPage(reply, 'settings.html', req)
+    return await sendPage(reply, 'settings.html', req)
   })
 
-  app.get('/api/settings', { preHandler: requireAuthApi }, async (_req, reply) => {
+  app.get('/messaging', { preHandler: requireAuth }, async (req, reply) => {
+    generateCsrf(req)
+    return await sendPage(reply, 'messaging.html', req)
+  })
+
+  app.get('/api/settings', { preHandler: requireApiKeyOrSession }, async (_req, reply) => {
     return reply.send({
-      project_name: getSettingOrDefault('project_name', 'WhatsApp Group Monitor'),
-      page_size: getSettingOrDefault('page_size', '50'),
+      project_name: await getSettingOrDefault('project_name', 'WhatsApp Group Monitor'),
+      page_size: await getSettingOrDefault('page_size', '50'),
     })
   })
 
-  app.post('/api/settings', { preHandler: requireAuthApi }, async (req, reply) => {
+  app.post('/api/settings', { preHandler: requireApiKeyOrSession }, async (req, reply) => {
     if (!verifyCsrf(req)) {
       return reply.status(403).send({ error: 'Invalid CSRF token' })
     }
@@ -99,39 +106,39 @@ export function registerRoutes(app: FastifyInstance) {
     const allowed = ['project_name', 'page_size']
     for (const key of allowed) {
       if (key in body && typeof body[key] === 'string') {
-        setSetting(key, body[key])
+        await setSetting(key, body[key])
       }
     }
     return reply.send({ ok: true })
   })
 
   // --- Protected API ---
-  app.get('/api/groups', { preHandler: requireAuthApi }, async (_req, reply) => {
+  app.get('/api/groups', { preHandler: requireApiKeyOrSession }, async (_req, reply) => {
     if (!isAccountDbReady()) {
       return reply.send({ groups: [] })
     }
-    const groups = getAllGroups()
-    GroupRecord.populateAllSummaries(groups)
+    const groups = await getAllGroups()
+    await GroupRecord.populateAllSummaries(groups)
     return reply.send({ groups: groups.map(g => g.toJSON()) })
   })
 
   app.get('/group/:jid', { preHandler: requireAuth }, async (req, reply) => {
     generateCsrf(req)
-    return sendPage(reply, 'group.html', req)
+    return await sendPage(reply, 'group.html', req)
   })
 
-  app.get('/api/groups/:jid', { preHandler: requireAuthApi }, async (req, reply) => {
+  app.get('/api/groups/:jid', { preHandler: requireApiKeyOrSession }, async (req, reply) => {
     if (!isAccountDbReady()) {
       return reply.status(503).send({ error: 'Not connected' })
     }
     const { jid } = req.params as { jid: string }
-    const group = getGroup(jid)
+    const group = await getGroup(jid)
     if (!group) {
       return reply.status(404).send({ error: 'Group not found' })
     }
 
-    const members = group.getMembers({ includeLeft: true })
-    const userActivity = group.getUserActivity(30)
+    const members = await group.getMembers({ includeLeft: true })
+    const userActivity = await group.getUserActivity(30)
     const activityMap = new Map(userActivity.map(a => [a.userJid, a]))
 
     let botUserJid: string | null = null
@@ -156,8 +163,8 @@ export function registerRoutes(app: FastifyInstance) {
     return reply.send({
       group: {
         ...group.toJSON(),
-        memberCount: group.getMemberCount(),
-        lastActivity: group.getLastActivity(),
+        memberCount: await group.getMemberCount(),
+        lastActivity: await group.getLastActivity(),
       },
       members: enrichedMembers,
     })
@@ -165,20 +172,20 @@ export function registerRoutes(app: FastifyInstance) {
 
   app.get('/user/:jid', { preHandler: requireAuth }, async (req, reply) => {
     generateCsrf(req)
-    return sendPage(reply, 'user.html', req)
+    return await sendPage(reply, 'user.html', req)
   })
 
-  app.get('/api/users/:jid', { preHandler: requireAuthApi }, async (req, reply) => {
+  app.get('/api/users/:jid', { preHandler: requireApiKeyOrSession }, async (req, reply) => {
     if (!isAccountDbReady()) return reply.status(503).send({ error: 'Not connected' })
     const { jid } = req.params as { jid: string }
-    const user = getUser(jid)
+    const user = await getUser(jid)
     if (!user) return reply.status(404).send({ error: 'User not found' })
 
-    const memberships = getUserGroupMemberships(jid)
-    const activityData = getUserActivityPerGroup(jid, 30)
+    const memberships = await getUserGroupMemberships(jid)
+    const activityData = await getUserActivityPerGroup(jid, 30)
     const activityMap = new Map(activityData.map(a => [a.groupJid, a]))
 
-    const allGroups = getAllGroups()
+    const allGroups = await getAllGroups()
     const groupMap = new Map(allGroups.map(g => [g.jid, g]))
     const membershipGroupJids = new Set(memberships.map(m => m.groupJid))
 

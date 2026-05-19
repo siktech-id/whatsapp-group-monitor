@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messaging &middot; {{PROJECT_NAME}}</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <link rel="stylesheet" href="/static/shared.css" />
+  <style>
+    .content { max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
+    .back { color: #667781; text-decoration: none; font-size: 0.85rem; margin-bottom: 1rem; display: block; }
+    .back:hover { text-decoration: underline; }
+
+    .chat-layout {
+      display: flex;
+      gap: 0;
+      height: calc(100vh - 160px);
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .conv-list {
+      width: 280px;
+      flex-shrink: 0;
+      background: white;
+      border-right: 1px solid #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .conv-list-header {
+      padding: 1rem;
+      border-bottom: 1px solid #f0f2f5;
+      font-weight: 500;
+      color: #1a1a1a;
+      font-size: 0.95rem;
+    }
+
+    .conv-items {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .conv-item {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f2f5;
+      transition: background 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .conv-item:hover { background: #f8f9fa; }
+
+    .conv-item.active {
+      background: #fffbeb;
+      border-left: 4px solid #25d366;
+      padding-left: calc(1rem - 4px);
+    }
+
+    .conv-item-name { font-size: 0.95rem; color: #1a1a1a; }
+    .conv-item-time { font-size: 0.8rem; color: #999; margin-left: 0.5rem; }
+
+    .new-message-btn {
+      padding: 0.75rem;
+      margin: 0.75rem;
+      background: #25d366;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      width: calc(100% - 1.5rem);
+    }
+
+    .new-message-btn:hover { background: #1da851; }
+
+    .chat-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: white;
+    }
+
+    .chat-header {
+      padding: 1rem;
+      border-bottom: 1px solid #f0f2f5;
+      background: white;
+    }
+
+    .chat-header h3 { margin: 0 0 0.25rem; color: #1a1a1a; font-size: 1rem; }
+    .chat-header .chat-meta { font-size: 0.8rem; color: #999; }
+
+    .chat-empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-size: 0.95rem;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .messages-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .msg-bubble {
+      display: flex;
+      margin-bottom: 0.25rem;
+    }
+
+    .msg-bubble.msg-in {
+      justify-content: flex-start;
+    }
+
+    .msg-bubble.msg-in .bubble {
+      background: #f0f2f5;
+      color: #1a1a1a;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      max-width: 70%;
+      word-wrap: break-word;
+      font-size: 0.9rem;
+    }
+
+    .msg-bubble.msg-out {
+      justify-content: flex-end;
+    }
+
+    .msg-bubble.msg-out .bubble {
+      background: #d9fdd3;
+      color: #1a1a1a;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      max-width: 70%;
+      word-wrap: break-word;
+      font-size: 0.9rem;
+    }
+
+    .msg-time {
+      font-size: 0.75rem;
+      color: #999;
+      margin-top: 0.25rem;
+      padding: 0 1rem;
+    }
+
+    .load-older-btn {
+      align-self: center;
+      padding: 0.5rem 1rem;
+      margin-top: 1rem;
+      background: white;
+      border: 1px solid #ddd;
+      color: #667781;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .load-older-btn:hover { background: #f8f9fa; }
+
+    .compose-box {
+      padding: 1rem;
+      border-top: 1px solid #f0f2f5;
+      background: white;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .compose-box textarea {
+      flex: 1;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      resize: none;
+      height: 40px;
+      outline: none;
+    }
+
+    .compose-box textarea:focus { border-color: #25d366; }
+
+    .compose-box button {
+      padding: 0.75rem 1.5rem;
+      background: #25d366;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      flex-shrink: 0;
+    }
+
+    .compose-box button:hover { background: #1da851; }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.open { display: flex; }
+
+    .modal-content {
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .modal-content h3 { margin: 0 0 1rem; color: #1a1a1a; }
+
+    .modal-content input,
+    .modal-content textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      box-sizing: border-box;
+      outline: none;
+    }
+
+    .modal-content input:focus,
+    .modal-content textarea:focus { border-color: #25d366; }
+
+    .modal-content textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+
+    .modal-buttons button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+
+    .modal-buttons .btn-send {
+      background: #25d366;
+      color: white;
+    }
+
+    .modal-buttons .btn-send:hover { background: #1da851; }
+
+    .modal-buttons .btn-cancel {
+      background: #f0f2f5;
+      color: #1a1a1a;
+    }
+
+    .modal-buttons .btn-cancel:hover { background: #e0e2e5; }
+
+    .loading { text-align: center; padding: 2rem; color: #667781; }
+  </style>
+</head>
+<body>
+  {{> header}}
+  <div class="content">
+    {{> status-bar}}
+    <a class="back" href="/">&larr; Back to groups</a>
+
+    <div class="chat-layout">
+      <div class="conv-list">
+        <div class="conv-list-header">Conversations</div>
+        <div id="conv-items" class="conv-items">
+          <div class="loading">Loading...</div>
+        </div>
+        <button class="new-message-btn" onclick="openNewMessageModal()">+ New Message</button>
+      </div>
+
+      <div class="chat-panel">
+        <div id="chat-header-container" style="display:none">
+          <div class="chat-header">
+            <h3 id="chat-title"></h3>
+            <div class="chat-meta" id="chat-meta"></div>
+          </div>
+        </div>
+
+        <div id="chat-empty" class="chat-empty">
+          Select a conversation to start messaging
+        </div>
+
+        <div id="messages-area" class="messages-area" style="display:none"></div>
+
+        <div id="compose-container" class="compose-box" style="display:none">
+          <textarea id="message-input" placeholder="Type your message..." onkeydown="handleMessageKeydown(event)"></textarea>
+          <button onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Message Modal -->
+  <div id="modal-new-message" class="modal">
+    <div class="modal-content">
+      <h3>Send a Message</h3>
+      <input type="text" id="modal-recipient" placeholder="Phone number (e.g., 628116191899)" />
+      <textarea id="modal-text" placeholder="Your message..." onkeydown="if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendNewMessage(); }"></textarea>
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-send" onclick="sendNewMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    let currentConvId = null;
+    let nextCursor = null;
+    let loadingMore = false;
+    let refreshInterval = null;
+
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function relativeTime(timestamp) {
+      const now = Date.now();
+      const date = typeof timestamp === 'number' && timestamp < 10000000000
+        ? new Date(timestamp * 1000)
+        : new Date(timestamp);
+      const diff = now - date.getTime();
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (minutes < 1) return 'now';
+      if (minutes < 60) return minutes + 'm ago';
+      if (hours < 24) return hours + 'h ago';
+      if (days < 7) return days + 'd ago';
+
+      const isToday = date.toDateString() === new Date().toDateString();
+      const isYesterday = new Date(date.getTime() + 86400000).toDateString() === new Date().toDateString();
+
+      if (isToday) return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      if (isYesterday) return 'Yesterday';
+
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    async function loadConversations() {
+      try {
+        const res = await fetch('/api/conversations');
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw new Error('Failed to load conversations');
+
+        const data = await res.json();
+        const container = document.getElementById('conv-items');
+
+        if (data.conversations.length === 0) {
+          container.innerHTML = '<div class="loading">No conversations yet</div>';
+          return;
+        }
+
+        container.innerHTML = data.conversations.map(conv => {
+          const time = conv.type === 'group'
+            ? relativeTime(conv.lastActivity)
+            : relativeTime(conv.lastMessageAt);
+          const icon = conv.type === 'group' ? '🟢' : '👤';
+
+          return `<div class="conv-item" onclick="selectConversation('${escHtml(conv.id)}', '${escHtml(conv.name)}', '${conv.type}')">
+            <div class="conv-item-name" title="${escHtml(conv.name)}">${icon} ${escHtml(conv.name.substring(0, 20))}</div>
+            <div class="conv-item-time">${time}</div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        document.getElementById('conv-items').innerHTML = '<div class="loading">Error loading conversations</div>';
+        console.error(e);
+      }
+    }
+
+    function selectConversation(id, name, type) {
+      currentConvId = id;
+      nextCursor = null;
+
+      // Clear existing refresh interval
+      if (refreshInterval) clearInterval(refreshInterval);
+
+      document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.conv-item').classList.add('active');
+
+      const headerContainer = document.getElementById('chat-header-container');
+      const emptyState = document.getElementById('chat-empty');
+      const messagesArea = document.getElementById('messages-area');
+      const composeContainer = document.getElementById('compose-container');
+
+      document.getElementById('chat-title').textContent = name;
+      document.getElementById('chat-meta').textContent = type === 'group' ? 'Group' : 'Direct message';
+
+      headerContainer.style.display = '';
+      emptyState.style.display = 'none';
+      messagesArea.style.display = 'flex';
+      composeContainer.style.display = 'flex';
+      messagesArea.innerHTML = '<div class="loading">Loading messages...</div>';
+      document.getElementById('message-input').value = '';
+      document.getElementById('message-input').focus();
+
+      loadMessages(id, null);
+
+      // Auto-refresh messages every 3 seconds when conversation is selected
+      refreshInterval = setInterval(() => {
+        if (currentConvId === id) {
+          loadMessages(id, null);
+        }
+      }, 3000);
+    }
+
+    let lastMessageCount = 0;
+
+    async function loadMessages(id, before) {
+      if (loadingMore) return;
+      loadingMore = true;
+
+      try {
+        let url = `/api/conversations/${encodeURIComponent(id)}/messages?limit=50`;
+        if (before) url += `&before=${encodeURIComponent(before)}`;
+
+        const res = await fetch(url);
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw new Error('Failed to load messages');
+
+        const data = await res.json();
+        const messagesArea = document.getElementById('messages-area');
+        nextCursor = data.nextCursor;
+
+        if (!before) {
+          messagesArea.innerHTML = '';
+        }
+
+        if (data.messages.length === 0) {
+          if (!before) messagesArea.innerHTML = '<div class="loading">No messages yet</div>';
+          loadingMore = false;
+          return;
+        }
+
+        const messageEls = data.messages.map(msg => {
+          let senderName = 'You';
+          let text = msg.text;
+          let time = '';
+
+          if (data.type === 'group') {
+            senderName = msg.senderName || msg.senderJid.substring(0, 15);
+            time = new Date(msg.timestamp * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          } else {
+            time = new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          }
+
+          const isOutgoing = data.type === 'group' ? msg.direction === 'outgoing' : msg.direction === 'outgoing';
+          const bubbleClass = isOutgoing ? 'msg-out' : 'msg-in';
+
+          return `<div class="msg-bubble ${bubbleClass}">
+            <div>
+              <div class="bubble">${escHtml(text)}</div>
+              <div class="msg-time">${escHtml(senderName)} • ${time}</div>
+            </div>
+          </div>`;
+        }).join('');
+
+        if (before) {
+          const firstMsg = messagesArea.firstChild;
+          messagesArea.insertAdjacentHTML('afterbegin', messageEls);
+        } else {
+          messagesArea.innerHTML = messageEls;
+          lastMessageCount = data.messages.length;
+        }
+
+        if (nextCursor && !before) {
+          const loadBtn = document.createElement('button');
+          loadBtn.className = 'load-older-btn';
+          loadBtn.textContent = 'Load older messages';
+          loadBtn.onclick = () => {
+            loadBtn.remove();
+            loadMessages(id, nextCursor);
+          };
+          messagesArea.insertAdjacentElement('afterbegin', loadBtn);
+        }
+
+        // Auto-scroll to bottom on new messages
+        if (!before) {
+          setTimeout(() => { messagesArea.scrollTop = messagesArea.scrollHeight; }, 0);
+        }
+      } catch (e) {
+        // Silent fail on refresh - don't show error if it was an auto-refresh
+        if (!before) {
+          console.error(e);
+        }
+      }
+
+      loadingMore = false;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('message-input');
+      const text = input.value.trim();
+      if (!text || !currentConvId) return;
+
+      try {
+        const isGroup = currentConvId.endsWith('@g.us');
+        const res = await fetch(isGroup ? `/api/groups/${encodeURIComponent(currentConvId)}/send` : '/api/messages/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+          body: JSON.stringify(isGroup ? { text } : { recipient: currentConvId, text }),
+        });
+
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw new Error('Failed to send message');
+
+        input.value = '';
+        loadMessages(currentConvId, null);
+      } catch (e) {
+        alert('Failed to send message: ' + e.message);
+        console.error(e);
+      }
+    }
+
+    function handleMessageKeydown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function openNewMessageModal() {
+      document.getElementById('modal-new-message').classList.add('open');
+      document.getElementById('modal-recipient').focus();
+    }
+
+    function closeModal() {
+      document.getElementById('modal-new-message').classList.remove('open');
+      document.getElementById('modal-recipient').value = '';
+      document.getElementById('modal-text').value = '';
+    }
+
+    async function sendNewMessage() {
+      const recipient = document.getElementById('modal-recipient').value.trim();
+      const text = document.getElementById('modal-text').value.trim();
+
+      if (!recipient || !text) {
+        alert('Please enter both phone number and message');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/messages/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+          body: JSON.stringify({ recipient, text }),
+        });
+
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw new Error('Failed to send message');
+
+        closeModal();
+        loadConversations();
+      } catch (e) {
+        alert('Failed to send message: ' + e.message);
+        console.error(e);
+      }
+    }
+
+    loadConversations();
+  </script>
+</body>
+</html>

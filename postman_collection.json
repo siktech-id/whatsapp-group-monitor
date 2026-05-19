@@ -1,0 +1,199 @@
+{
+  "info": {
+    "name": "WhatsApp Group Monitor - Message Sending API",
+    "description": "API collection for sending WhatsApp messages (Phase 1) - API Key Authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Message Sending (API Key)",
+      "item": [
+        {
+          "name": "Send Message to Individual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipient\": \"628116191899\",\n  \"text\": \"Hello! This is a test message.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/messages/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "messages", "send"]
+            },
+            "description": "Send a message to an individual contact.\n\nRecipient can be:\n- Plain phone number: \"628116191899\"\n- Full JID: \"628116191899@s.whatsapp.net\"\n\nBoth formats are auto-normalized.\n\nAuthentication: X-API-Key header"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Message to Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Hello everyone! This is a group message.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/groups/120363408247627931@g.us/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "groups", "120363408247627931@g.us", "send"]
+            },
+            "description": "Send a message to a WhatsApp group.\n\nReplace the group JID in URL with the actual group ID (format: 120363xxxxx@g.us)\n\nAuthentication: X-API-Key header"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Sent Messages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/api/messages/sent",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "messages", "sent"]
+            },
+            "description": "Retrieve the last 50 sent messages with their status and delivery info.\n\nAuthentication: X-API-Key header"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Message Sending (Session Auth)",
+      "item": [
+        {
+          "name": "1. Get Login Page (CSRF Token)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["login"]
+            },
+            "description": "Fetch login page to extract CSRF token. Save the token for next requests. (Optional - for web dashboard users)"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "admin",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "admin",
+                  "type": "text"
+                },
+                {
+                  "key": "_csrf",
+                  "value": "{{csrf_token}}",
+                  "type": "text",
+                  "description": "Extract from login page response"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:3000/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["login"]
+            },
+            "description": "Login with admin credentials. Creates authenticated session. (Optional - for web dashboard users)"
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get Dashboard (API CSRF Token)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": [""]
+            },
+            "description": "After login, fetch dashboard to get new CSRF token for API calls. (Optional - for web dashboard users)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "api_key",
+      "value": "dev-key-change-in-production",
+      "type": "string",
+      "description": "API Key for developer authentication. Default is 'dev-key-change-in-production'. Set via API_KEY environment variable in production."
+    },
+    {
+      "key": "csrf_token",
+      "value": "paste_csrf_from_login_page_here",
+      "type": "string",
+      "description": "CSRF token for session-based auth (optional)"
+    }
+  ]
+}

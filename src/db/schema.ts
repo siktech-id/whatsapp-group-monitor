@@ -1,21 +1,25 @@
-import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
+import { pgTable, pgSchema, text, boolean, timestamp, bigint, jsonb, serial, integer, primaryKey } from 'drizzle-orm/pg-core'
 
-// --- Shared DB (monitor.db) ---
+// --- Shared DB (settings in shared schema) ---
 
-export const settings = sqliteTable('settings', {
+export const sharedSchema = pgSchema('shared')
+
+export const settings = sharedSchema.table('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 })
 
-// --- Account DB (account.db) ---
+// --- Account DB (all operational tables in account schema) ---
 
-export const groups = sqliteTable('groups', {
+export const accountSchema = pgSchema('account')
+
+export const groups = accountSchema.table('groups', {
   jid: text('jid').primaryKey(),
   name: text('name').notNull(),
-  isCommunity: integer('is_community', { mode: 'boolean' }).notNull().default(false),
+  isCommunity: boolean('is_community').notNull().default(false),
   parentCommunityJid: text('parent_community_jid'),
-  permissions: text('permissions', { mode: 'json' }).$type<{
+  permissions: jsonb('permissions').$type<{
     announce?: boolean
     restrict?: boolean
     memberAddMode?: boolean
@@ -23,8 +27,8 @@ export const groups = sqliteTable('groups', {
   }>(),
   botMembership: text('bot_membership', { enum: ['none', 'participant', 'admin', 'superadmin'] }).notNull().default('none'),
   botFunctions: integer('bot_functions').notNull().default(0),
-  isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  isArchived: boolean('is_archived').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 })
 
 export type Group = typeof groups.$inferSelect
@@ -32,23 +36,23 @@ export type Group = typeof groups.$inferSelect
 export const membershipLevels = ['none', 'pending_approval', 'participant', 'admin', 'superadmin'] as const
 export type MembershipLevel = typeof membershipLevels[number]
 
-export const users = sqliteTable('users', {
+export const users = accountSchema.table('users', {
   jid: text('jid').primaryKey(),
   phoneNumber: text('phone_number'),
-  isBanned: integer('is_banned', { mode: 'boolean' }).notNull().default(false),
+  isBanned: boolean('is_banned').notNull().default(false),
   displayName: text('display_name'),
-  displayNameUpdatedAt: integer('display_name_updated_at', { mode: 'timestamp_ms' }),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  displayNameUpdatedAt: timestamp('display_name_updated_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 })
 
-export const groupMembers = sqliteTable('group_members', {
+export const groupMembers = accountSchema.table('group_members', {
   groupJid: text('group_jid').notNull().references(() => groups.jid),
   userJid: text('user_jid').notNull().references(() => users.jid),
   membership: text('membership', { enum: membershipLevels }).notNull().default('participant'),
-  joinedAt: integer('joined_at', { mode: 'timestamp_ms' }),
-  leftAt: integer('left_at', { mode: 'timestamp_ms' }),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  joinedAt: timestamp('joined_at', { withTimezone: true }),
+  leftAt: timestamp('left_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
   lastReadAt: text('last_read_at'),
 }, (table) => [
   primaryKey({ columns: [table.groupJid, table.userJid] }),
@@ -61,30 +65,41 @@ export const activityEventTypes = [
 ] as const
 export type ActivityEventType = typeof activityEventTypes[number]
 
-export const groupActivityLog = sqliteTable('group_activity_log', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const groupActivityLog = accountSchema.table('group_activity_log', {
+  id: serial('id').primaryKey(),
   groupJid: text('group_jid').notNull(),
   userJid: text('user_jid').notNull(),
   messageId: text('message_id').notNull(),
   parentId: text('parent_id'),
   eventType: text('event_type', { enum: activityEventTypes }).notNull(),
-  metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
-  raw: text('raw', { mode: 'json' }).$type<Record<string, unknown>>(),
-  timestamp: integer('timestamp').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  raw: jsonb('raw').$type<Record<string, unknown>>(),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 })
 
 export type GroupActivityRow = typeof groupActivityLog.$inferSelect
 
-export const outgoingMessages = sqliteTable('outgoing_messages', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const outgoingMessages = accountSchema.table('outgoing_messages', {
+  id: serial('id').primaryKey(),
   recipient: text('recipient').notNull(),
   text: text('text').notNull(),
   status: text('status', { enum: ['pending', 'sent', 'failed'] }).notNull().default('pending'),
   whatsappMessageId: text('whatsapp_message_id'),
   error: text('error'),
-  sentAt: integer('sent_at', { mode: 'timestamp_ms' }),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 })
 
 export type OutgoingMessage = typeof outgoingMessages.$inferSelect
+
+export const incomingMessages = accountSchema.table('incoming_messages', {
+  id: serial('id').primaryKey(),
+  senderJid: text('sender_jid').notNull(),
+  text: text('text').notNull(),
+  whatsappMessageId: text('whatsapp_message_id').notNull().unique(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+})
+
+export type IncomingMessage = typeof incomingMessages.$inferSelect

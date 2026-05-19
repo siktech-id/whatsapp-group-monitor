@@ -6,12 +6,12 @@ function bareId(jid: string): string {
   return jid.split(':')[0].split('@')[0]
 }
 
-export function upsertUser(jid: string, opts?: { phoneNumber?: string; displayName?: string }) {
+export async function upsertUser(jid: string, opts?: { phoneNumber?: string; displayName?: string }) {
   const db = getAccountDb()
   const now = new Date()
   const phone = opts?.phoneNumber ? bareId(opts.phoneNumber) : null
 
-  return db.insert(users).values({
+  await db.insert(users).values({
     jid,
     phoneNumber: phone,
     displayName: opts?.displayName || null,
@@ -28,32 +28,32 @@ export function upsertUser(jid: string, opts?: { phoneNumber?: string; displayNa
       } : {}),
       updatedAt: now,
     },
-  }).run()
+  })
 }
 
-export function getUser(jid: string) {
+export async function getUser(jid: string) {
   const db = getAccountDb()
-  return db.select().from(users).where(eq(users.jid, jid)).get() ?? null
+  const rows = await db.select().from(users).where(eq(users.jid, jid)).limit(1)
+  return rows[0] ?? null
 }
 
-export function userExists(jid: string): boolean {
+export async function userExists(jid: string): Promise<boolean> {
   const db = getAccountDb()
-  return !!db.select({ jid: users.jid }).from(users).where(eq(users.jid, jid)).get()
+  const rows = await db.select({ jid: users.jid }).from(users).where(eq(users.jid, jid)).limit(1)
+  return rows.length > 0
 }
 
-export function updateDisplayName(jid: string, name: string) {
+export async function updateDisplayName(jid: string, name: string) {
   const db = getAccountDb()
   const now = new Date()
   return db.update(users)
     .set({ displayName: name, displayNameUpdatedAt: now, updatedAt: now })
     .where(eq(users.jid, jid))
-    .run()
 }
 
-export function updatePhoneNumber(jid: string, phoneJid: string) {
+export async function updatePhoneNumber(jid: string, phoneJid: string) {
   const db = getAccountDb()
   return db.update(users)
     .set({ phoneNumber: bareId(phoneJid), updatedAt: new Date() })
     .where(eq(users.jid, jid))
-    .run()
 }

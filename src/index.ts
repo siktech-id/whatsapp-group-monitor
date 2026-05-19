@@ -1,3 +1,6 @@
+import { config as dotenvConfig } from 'dotenv'
+dotenvConfig()
+
 import { mkdirSync } from 'fs'
 import { config } from './config.js'
 import { logger } from './utils/logger.js'
@@ -10,7 +13,7 @@ async function main() {
 
   logger.info('Starting WhatsApp Group Monitor...')
 
-  initSharedDb()
+  await initSharedDb()
   await startWebServer()
   await startConnection()
 }

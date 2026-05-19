@@ -39,7 +39,7 @@ export function getCachedMessage(id: string): WAMessage | undefined {
  * Get encryption context (encKey + options) for a poll/event creation message.
  * Checks LRU cache first, falls back to DB.
  */
-export function getEncryptionContext(groupJid: string, messageId: string): { encKey: Uint8Array; options?: string[] } | null {
+export async function getEncryptionContext(groupJid: string, messageId: string): Promise<{ encKey: Uint8Array; options?: string[] } | null> {
   // Try cache first
   const cached = msgCache.get(messageId)
   if (cached) {
@@ -58,7 +58,7 @@ export function getEncryptionContext(groupJid: string, messageId: string): { enc
   // Fall back to DB
   if (isAccountDbReady()) {
     try {
-      const row = getCreationRecord(groupJid, messageId)
+      const row = await getCreationRecord(groupJid, messageId)
       if (row?.metadata) {
         const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata
         if (meta.encKey) {
@@ -84,12 +84,13 @@ async function getMessage(key: WAMessageKey) {
 export async function startConnection(): Promise<void> {
   const { state, saveCreds } = await initAuthState()
   const { version } = await fetchLatestBaileysVersion()
+  const projectName = await getSettingOrDefault('project_name', 'WhatsApp Group Monitor')
 
   logger.info({ version: version.join('.') }, 'Using WA Web version')
 
   sock = makeWASocket({
     version,
-    browser: [getSettingOrDefault('project_name', 'WhatsApp Group Monitor'), 'Chrome', '22.0'],
+    browser: [projectName, 'Chrome', '22.0'],
     syncFullHistory: true,
     shouldSyncHistoryMessage: () => true,
     logger: logger.child({ module: 'baileys' }),

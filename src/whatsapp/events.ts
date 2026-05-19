@@ -13,10 +13,10 @@ import { logger } from '../utils/logger.js'
 export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void>) {
   sock.ev.process(async (events) => {
     if (events['connection.update']) {
-      handleConnectionUpdate(events['connection.update'], sock.user)
+      await handleConnectionUpdate(events['connection.update'], sock.user)
 
       if (events['connection.update'].connection === 'open') {
-        syncGroups(sock)
+        void syncGroups(sock)
       }
     }
 
@@ -27,7 +27,7 @@ export function setupEventHandlers(sock: WASocket, saveCreds: () => Promise<void
     }
 
     if (events['messages.upsert']) {
-      handleMessagesUpsert(events['messages.upsert'])
+      void handleMessagesUpsert(events['messages.upsert'])
     }
 
     if (events['messages.reaction']) {

@@ -10,7 +10,7 @@ export function getCurrentQr() { return currentQr }
 export function getConnectionState() { return connectionState }
 export function getBotUser() { return botUser }
 
-export function handleConnectionUpdate(update: Partial<ConnectionState>, user?: Contact | null) {
+export async function handleConnectionUpdate(update: Partial<ConnectionState>, user?: Contact | null) {
   if (update.qr) {
     currentQr = update.qr
     logger.debug('New QR code generated')
@@ -24,12 +24,12 @@ export function handleConnectionUpdate(update: Partial<ConnectionState>, user?: 
       const name = user?.name || user?.notify || null
       botUser = { name, phone }
       if (phone) {
-        initAccountDb(phone)
+        await initAccountDb(phone)
       }
       logger.info({ phone }, 'WhatsApp connection established')
     } else if (update.connection === 'close') {
       botUser = null
-      closeAccountDb()
+      await closeAccountDb()
     }
   }
 }

@@ -56,13 +56,13 @@ export class GroupRecord {
   }
 
   /** Populate memberCount, activityCount, lastActivity for all groups in one batch */
-  static populateAllSummaries(groups: GroupRecord[]): void {
+  static async populateAllSummaries(groups: GroupRecord[]): Promise<void> {
     const nonCommunityJids = groups.filter(g => !g.isCommunity).map(g => g.jid)
     const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 86400)
 
-    const memberCounts = getGroupMemberCounts(nonCommunityJids)
-    const activityCounts = getGroupActivityCounts(nonCommunityJids, thirtyDaysAgo)
-    const lastActivityMap = getGroupLastActivity(nonCommunityJids)
+    const memberCounts = await getGroupMemberCounts(nonCommunityJids)
+    const activityCounts = await getGroupActivityCounts(nonCommunityJids, thirtyDaysAgo)
+    const lastActivityMap = await getGroupLastActivity(nonCommunityJids)
 
     // Populate regular groups
     for (const g of groups) {
@@ -76,7 +76,7 @@ export class GroupRecord {
     for (const g of groups) {
       if (!g.isCommunity) continue
       const childJids = g.getChildJids()
-      g.memberCount = childJids.length > 0 ? getDistinctMemberCount(childJids) : 0
+      g.memberCount = childJids.length > 0 ? await getDistinctMemberCount(childJids) : 0
       g.activityCount = childJids.reduce((sum, jid) => sum + (activityCounts.get(jid) ?? 0), 0)
       const maxLast = childJids.reduce((max, jid) => {
         const ts = lastActivityMap.get(jid)
@@ -98,53 +98,53 @@ export class GroupRecord {
     return this._children.map(g => g.jid)
   }
 
-  getMemberCount(): number {
+  async getMemberCount(): Promise<number> {
     if (this.isCommunity) {
       const childJids = this.getChildJids()
-      return childJids.length > 0 ? getDistinctMemberCount(childJids) : 0
+      return childJids.length > 0 ? await getDistinctMemberCount(childJids) : 0
     }
-    const counts = getGroupMemberCounts([this.jid])
+    const counts = await getGroupMemberCounts([this.jid])
     return counts.get(this.jid) ?? 0
   }
 
-  getMembers(opts?: { includeLeft?: boolean }) {
+  async getMembers(opts?: { includeLeft?: boolean }) {
     if (this.isCommunity) {
-      return getDistinctMembers(this.getChildJids(), opts)
+      return await getDistinctMembers(this.getChildJids(), opts)
     }
-    return getGroupMembers(this.jid, opts)
+    return await getGroupMembers(this.jid, opts)
   }
 
-  getActivityCount(sinceTimestamp: number): number {
+  async getActivityCount(sinceTimestamp: number): Promise<number> {
     if (this.isCommunity) {
       const childJids = this.getChildJids()
-      const counts = getGroupActivityCounts(childJids, sinceTimestamp)
+      const counts = await getGroupActivityCounts(childJids, sinceTimestamp)
       let total = 0
       for (const cnt of counts.values()) total += cnt
       return total
     }
-    const counts = getGroupActivityCounts([this.jid], sinceTimestamp)
+    const counts = await getGroupActivityCounts([this.jid], sinceTimestamp)
     return counts.get(this.jid) ?? 0
   }
 
-  getLastActivity(): number | null {
+  async getLastActivity(): Promise<number | null> {
     if (this.isCommunity) {
       const childJids = this.getChildJids()
-      const map = getGroupLastActivity(childJids)
+      const map = await getGroupLastActivity(childJids)
       let max: number | null = null
       for (const ts of map.values()) {
         if (max === null || ts > max) max = ts
       }
       return max
     }
-    const map = getGroupLastActivity([this.jid])
+    const map = await getGroupLastActivity([this.jid])
     return map.get(this.jid) ?? null
   }
 
-  getUserActivity(sinceDays: number) {
+  async getUserActivity(sinceDays: number) {
     if (this.isCommunity) {
       const merged = new Map<string, { userJid: string; total: number; posts: number; reactions: number; lastActivity: number | null }>()
       for (const childJid of this.getChildJids()) {
-        for (const a of getGroupUserActivity(childJid, sinceDays)) {
+        for (const a of await getGroupUserActivity(childJid, sinceDays)) {
           const existing = merged.get(a.userJid)
           if (existing) {
             existing.total += a.total

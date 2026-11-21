@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { getSock } from '../../whatsapp/client.js'
 import { isAccountDbReady } from '../../db/account.js'
-import { requireApiKeyOrSession, requireScope, isApiKeyRequest, verifyCsrf } from '../middleware/auth.js'
+import { requireApiKeyOrSession, requireScope, requireSendQuota, isApiKeyRequest, verifyCsrf } from '../middleware/auth.js'
 import { insertOutgoingMessage, updateOutgoingMessageStatus, getRecentOutgoingMessages } from '../../db/queries/outgoing-messages.js'
 import { logger } from '../../utils/logger.js'
 
@@ -13,7 +13,7 @@ function normalizeRecipient(recipient: string): string {
 export function registerMessageRoutes(app: FastifyInstance) {
   app.post<{ Body: { recipient: string; text: string } }>(
     '/api/messages/send',
-    { preHandler: [requireApiKeyOrSession, requireScope('send')] },
+    { preHandler: [requireApiKeyOrSession, requireScope('send'), requireSendQuota] },
     async (req, reply) => {
       if (!isApiKeyRequest(req) && !verifyCsrf(req)) {
         return reply.status(403).send({ error: 'Invalid CSRF token' })
@@ -58,7 +58,7 @@ export function registerMessageRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { jid: string }; Body: { text: string } }>(
     '/api/groups/:jid/send',
-    { preHandler: [requireApiKeyOrSession, requireScope('send')] },
+    { preHandler: [requireApiKeyOrSession, requireScope('send'), requireSendQuota] },
     async (req, reply) => {
       if (!isApiKeyRequest(req) && !verifyCsrf(req)) {
         return reply.status(403).send({ error: 'Invalid CSRF token' })

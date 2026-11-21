@@ -43,6 +43,30 @@ export async function initSharedDb() {
       )
     `)
 
+    await pool.query(`
+      ALTER TABLE shared.api_clients ADD COLUMN IF NOT EXISTS rate_limit_per_min INTEGER NOT NULL DEFAULT 60;
+      ALTER TABLE shared.api_clients ADD COLUMN IF NOT EXISTS send_limit_per_min INTEGER NOT NULL DEFAULT 10;
+
+      CREATE TABLE IF NOT EXISTS shared.api_request_logs (
+        id BIGSERIAL PRIMARY KEY,
+        client_id INTEGER,
+        key_prefix TEXT,
+        method TEXT NOT NULL,
+        route TEXT,
+        path TEXT NOT NULL,
+        status_code INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        ip TEXT,
+        user_agent TEXT,
+        request_body TEXT,
+        error TEXT,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_api_logs_created ON shared.api_request_logs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_api_logs_client_created ON shared.api_request_logs(client_id, created_at);
+    `)
+
     logger.info('Shared database initialized')
   } catch (err) {
     logger.error({ error: err }, 'Failed to initialize shared database')

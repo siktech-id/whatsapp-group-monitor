@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, text, boolean, timestamp, bigint, jsonb, serial, integer, primaryKey } from 'drizzle-orm/pg-core'
+import { pgTable, pgSchema, text, boolean, timestamp, bigint, bigserial, jsonb, serial, integer, primaryKey } from 'drizzle-orm/pg-core'
 
 // --- Shared DB (settings in shared schema) ---
 
@@ -19,12 +19,33 @@ export const apiClients = sharedSchema.table('api_clients', {
   keyPrefix: text('key_prefix').notNull(),
   keyHash: text('key_hash').notNull().unique(),
   scopes: text('scopes').array().notNull().$type<ApiScope[]>(),
+  rateLimitPerMin: integer('rate_limit_per_min').notNull().default(60),
+  sendLimitPerMin: integer('send_limit_per_min').notNull().default(10),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 })
 
 export type ApiClient = typeof apiClients.$inferSelect
+
+/** One row per request that carried an x-api-key header (valid or not). */
+export const apiRequestLogs = sharedSchema.table('api_request_logs', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  clientId: integer('client_id'), // null = key didn't match an active client
+  keyPrefix: text('key_prefix'), // first 8 chars of the key that was sent
+  method: text('method').notNull(),
+  route: text('route'), // route pattern, e.g. /api/groups/:jid (null for unknown routes)
+  path: text('path').notNull(), // full URL incl. query string
+  statusCode: integer('status_code').notNull(),
+  durationMs: integer('duration_ms').notNull(),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  requestBody: text('request_body'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+})
+
+export type ApiRequestLog = typeof apiRequestLogs.$inferSelect
 
 // --- Account DB (all operational tables in account schema) ---
 

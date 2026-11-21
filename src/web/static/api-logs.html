@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Logs &middot; {{PROJECT_NAME}}</title>
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
+  <link rel="stylesheet" href="/static/shared.css" />
+  <style>
+    :root {
+      --ok: #2a78d6;        /* successful requests (validated pair with --err, CVD-safe) */
+      --err: #d03b3b;       /* failed requests */
+      --grid: #e1e0d9;
+      --axis: #c3c2b7;
+      --muted: #667781;
+      --ink: #1a1a1a;
+    }
+    .content { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+    .back { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
+    .back:hover { text-decoration: underline; }
+    h1 { font-size: 1.2rem; color: var(--ink); margin: 0.75rem 0 1rem; }
+    .box { background: white; padding: 1.25rem 1.5rem; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin: 0 0 1rem; }
+    h2 { color: var(--ink); font-size: 1rem; margin: 0 0 0.75rem; }
+
+    .filters { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .filters select, .filters input[type=text] {
+      padding: 0.45rem 0.6rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem; background: white; color: var(--ink);
+    }
+    .filters input[type=text] { flex: 1 1 180px; }
+    .filters label { font-size: 0.85rem; color: var(--muted); display: flex; gap: 0.3rem; align-items: center; }
+    .link-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; text-decoration: underline; padding: 0; }
+
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .tile { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 0.9rem 1rem; }
+    .tile .label { color: var(--muted); font-size: 0.8rem; }
+    .tile .value { color: var(--ink); font-size: 1.5rem; font-weight: 600; margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
+    .tile .sub { color: var(--muted); font-size: 0.75rem; margin-top: 0.1rem; }
+
+    .legend { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.35rem; vertical-align: -1px; background: var(--c); }
+    .chart-wrap { position: relative; }
+    #chart { width: 100%; height: 200px; display: block; }
+    #chart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+    .tooltip {
+      position: absolute; pointer-events: none; background: white; border: 1px solid rgba(11,11,11,0.10);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12); border-radius: 6px; padding: 0.45rem 0.6rem; font-size: 0.8rem;
+      color: var(--ink); display: none; white-space: nowrap; z-index: 5;
+    }
+    .tooltip .k { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 0.35rem; }
+    details.table-view { margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted); }
+
+    .grid2 { display: grid; grid-template-columns: 3fr 2fr; gap: 1rem; }
+    .grid2 > * { min-width: 0; } /* let wide tables scroll inside the card instead of stretching the grid */
+    @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; color: var(--muted); font-weight: 500; padding: 0.45rem 0.5rem; border-bottom: 1px solid #eee; white-space: nowrap; }
+    td { padding: 0.45rem 0.5rem; border-bottom: 1px solid #f3f3f3; vertical-align: top; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover td { background: #f7f8f9; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }
+    .path { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status { display: inline-block; border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.78rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .s-ok { background: #e8f1fc; color: #1d5aa6; }
+    .s-4xx { background: #fff4e0; color: #8a5a00; }
+    .s-429 { background: #f3e8ff; color: #5b2a9e; }
+    .s-5xx { background: #fdeaea; color: #a32424; }
+    .muted { color: var(--muted); }
+    tr.detail td { background: #fafafa; }
+    .detail-grid { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; font-size: 0.82rem; }
+    .detail-grid dt { color: var(--muted); }
+    .detail-grid dd { margin: 0; word-break: break-all; }
+    pre { margin: 0; white-space: pre-wrap; word-break: break-all; background: white; border: 1px solid #eee; border-radius: 6px; padding: 0.5rem; max-height: 300px; overflow: auto; }
+    .more { margin-top: 0.75rem; text-align: center; }
+    .btn { padding: 0.5rem 1.1rem; background: #25d366; color: white; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+    .btn:hover { background: #1da851; }
+    .empty { color: var(--muted); font-size: 0.9rem; padding: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  {{> header}}
+  <div class="content">
+    {{> status-bar}}
+    <a class="back" href="/api-keys">&larr; Back to API keys</a>
+    <h1>API request logs</h1>
+
+    <div class="box">
+      <div class="filters">
+        <select id="f-client" aria-label="Client"><option value="">All clients</option><option value="unknown">Unidentified keys</option></select>
+        <select id="f-range" aria-label="Time range">
+          <option value="1h">Last hour</option>
+          <option value="24h" selected>Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+        <select id="f-status" aria-label="Status">
+          <option value="">All statuses</option>
+          <option value="2xx">Successful</option>
+          <option value="errors">All errors</option>
+          <option value="4xx">Client errors (4xx)</option>
+          <option value="429">Rate limited (429)</option>
+          <option value="5xx">Server errors (5xx)</option>
+        </select>
+        <select id="f-method" aria-label="Method">
+          <option value="">All methods</option><option>GET</option><option>POST</option><option>PATCH</option><option>DELETE</option>
+        </select>
+        <select id="f-route" aria-label="Endpoint"><option value="">All endpoints</option></select>
+        <input type="text" id="f-q" placeholder="Search path, e.g. 120363 or /send" />
+        <label><input type="checkbox" id="f-live" /> Auto-refresh</label>
+        <button class="link-btn" id="f-reset">Reset</button>
+      </div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+
+    <div class="box">
+      <h2 id="chart-title">Requests over time</h2>
+      <div class="legend">
+        <span style="--c: var(--ok)">Successful</span>
+        <span style="--c: var(--err)">Errors (4xx, 429, 5xx)</span>
+      </div>
+      <div class="chart-wrap">
+        <svg id="chart" role="img" aria-label="Requests over time, successful and errors stacked"></svg>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+      <details class="table-view">
+        <summary>Show as table</summary>
+        <div class="table-wrap"><table id="series-table"></table></div>
+      </details>
+    </div>
+
+    <div class="grid2">
+      <div class="box">
+        <h2>Top endpoints</h2>
+        <div class="table-wrap"><table id="routes"></table></div>
+      </div>
+      <div class="box">
+        <h2>By client</h2>
+        <div class="table-wrap"><table id="clients"></table></div>
+      </div>
+    </div>
+
+    <div class="box">
+      <h2>Requests <span class="muted" style="font-weight:400;font-size:0.85rem">(click a row for details)</span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Client</th><th>Method</th><th>Path</th><th>Status</th><th class="num">Duration</th><th>IP</th></tr>
+          </thead>
+          <tbody id="logs"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="logs-empty" style="display:none">No requests match these filters.</p>
+      <div class="more"><button class="btn" id="more" style="display:none">Load more</button></div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const FILTERS = { client: 'f-client', range: 'f-range', status: 'f-status', method: 'f-method', route: 'f-route', q: 'f-q' };
+    let nextBefore = null;
+    let liveTimer = null;
+    let clientNames = {};
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    const fmtNum = (n) => Number(n).toLocaleString();
+    const fmtTime = (d) => new Date(d).toLocaleString();
+    const pct = (a, b) => b ? (100 * a / b).toFixed(1) + '%' : '—';
+
+    function statusClass(code) {
+      if (code === 429) return 's-429';
+      if (code >= 500) return 's-5xx';
+      if (code >= 400) return 's-4xx';
+      return 's-ok';
+    }
+
+    function clientLabel(id, name, prefix) {
+      if (name) return esc(name);
+      if (id == null) return '<span class="muted">Unidentified' + (prefix ? ' (<span class="mono">' + esc(prefix) + '…</span>)' : '') + '</span>';
+      return '#' + esc(id);
+    }
+
+    // --- filters <-> URL ---
+    function currentQuery() {
+      const p = new URLSearchParams();
+      for (const [k, id] of Object.entries(FILTERS)) {
+        const v = $(id).value.trim();
+        if (v && !(k === 'range' && v === '24h')) p.set(k, v);
+      }
+      return p;
+    }
+    function applyUrlToFilters() {
+      const p = new URLSearchParams(location.search);
+      for (const [k, id] of Object.entries(FILTERS)) {
+        const v = p.get(k);
+        if (v == null) continue;
+        const el = $(id);
+        if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v)) {
+          el.add(new Option(v, v)); // e.g. route/client not loaded yet
+        }
+        el.value = v;
+      }
+    }
+    function syncUrl() {
+      const q = currentQuery().toString();
+      history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+    }
+
+    async function loadClients() {
+      const res = await fetch('/api/api-keys');
+      if (res.status === 401) { location.href = '/login'; return; }
+      const { clients } = await res.json();
+      const sel = $('f-client');
+      const keep = sel.value;
+      for (const c of clients) {
+        clientNames[c.id] = c.name;
+        if (![...sel.options].some(o => o.value === String(c.id))) {
+          sel.add(new Option(c.name + (c.revokedAt ? ' (revoked)' : ''), String(c.id)));
+        } else {
+          [...sel.options].find(o => o.value === String(c.id)).text = c.name + (c.revokedAt ? ' (revoked)' : '');
+        }
+      }
+      sel.value = keep;
+    }
+
+    // --- stats ---
+    async function loadStats() {
+      const res = await fetch('/api/api-logs/stats?' + currentQuery());
+      if (!res.ok) return;
+      const s = await res.json();
+      const t = s.totals;
+      const errs = t.clientErrors + t.rateLimited + t.serverErrors;
+      $('tiles').innerHTML = [
+        ['Total requests', fmtNum(t.total), ''],
+        ['Success rate', pct(t.ok, t.total), fmtNum(t.ok) + ' successful'],
+        ['Client errors (4xx)', fmtNum(t.clientErrors), 'excl. 429'],
+        ['Rate limited (429)', fmtNum(t.rateLimited), ''],
+        ['Server errors (5xx)', fmtNum(t.serverErrors), ''],
+        ['Latency', t.total ? t.avgMs + ' ms' : '—', t.total ? 'p95 ' + t.p95Ms + ' ms' : ''],
+      ].map(([l, v, sub]) => '<div class="tile"><div class="label">' + l + '</div><div class="value">' + v + '</div><div class="sub">' + sub + '</div></div>').join('');
+
+      $('chart-title').textContent = 'Requests per ' + s.bucket;
+      drawChart(s.series, s.bucket);
+
+      // Endpoint filter options come from what's actually been called
+      const rsel = $('f-route');
+      const keep = rsel.value;
+      for (const r of s.byRoute) {
+        if (r.route && ![...rsel.options].some(o => o.value === r.route)) rsel.add(new Option(r.route, r.route));
+      }
+      rsel.value = keep;
+
+      $('routes').innerHTML = s.byRoute.length
+        ? '<thead><tr><th>Endpoint</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Avg</th></tr></thead><tbody>' +
+          s.byRoute.map(r =>
+            '<tr class="clickable" data-route="' + esc(r.route ?? '') + '" data-method="' + esc(r.method) + '">' +
+            '<td><span class="mono">' + esc(r.method) + ' ' + esc(r.route ?? '(unknown route)') + '</span></td>' +
+            '<td class="num">' + fmtNum(r.total) + '</td>' +
+            '<td class="num">' + fmtNum(r.errors) + ' <span class="muted">(' + pct(r.errors, r.total) + ')</span></td>' +
+            '<td class="num">' + r.avgMs + ' ms</td></tr>').join('') + '</tbody>'
+        : '<tbody><tr><td class="empty">No data</td></tr></tbody>';
+
+      $('clients').innerHTML = s.byClient.length
+        ? '<thead><tr><th>Client</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">429s</th></tr></thead><tbody>' +
+          s.byClient.map(c =>
+            '<tr class="clickable" data-client="' + (c.clientId == null ? 'unknown' : c.clientId) + '">' +
+            '<td>' + clientLabel(c.clientId, c.clientName) + '</td>' +
+            '<td class="num">' + fmtNum(c.total) + '</td>' +
+            '<td class="num">' + fmtNum(c.errors) + '</td>' +
+            '<td class="num">' + fmtNum(c.rateLimited) + '</td></tr>').join('') + '</tbody>'
+        : '<tbody><tr><td class="empty">No data</td></tr></tbody>';
+    }
+
+    // --- chart: stacked columns, successful (bottom) + errors (top) ---
+    function buildBuckets(series, bucket) {
+      // Fill empty buckets so time gaps show as gaps, not compressed columns
+      const range = $('f-range').value;
+      const stepMs = bucket === 'hour' ? 3600e3 : 86400e3;
+      const spanMs = { '1h': 3600e3, '24h': 86400e3, '7d': 7 * 86400e3, '30d': 30 * 86400e3 }[range];
+      const floor = (ms) => {
+        const d = new Date(ms);
+        if (bucket === 'hour') d.setMinutes(0, 0, 0); else d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      };
+      const byT = new Map(series.map(p => [floor(new Date(p.t).getTime()), p]));
+      const out = [];
+      for (let t = floor(Date.now() - spanMs); t <= Date.now(); t += stepMs) {
+        const p = byT.get(t);
+        out.push({ t, ok: p ? p.ok : 0, errors: p ? p.errors : 0 });
+      }
+      return out;
+    }
+
+    function niceMax(v) {
+      if (v <= 5) return 5;
+      const pow = Math.pow(10, Math.floor(Math.log10(v)));
+      for (const m of [1, 2, 2.5, 5, 10]) if (m * pow >= v) return m * pow;
+      return 10 * pow;
+    }
+
+    function drawChart(series, bucket) {
+      const svg = $('chart');
+      const data = buildBuckets(series, bucket);
+      const W = svg.clientWidth || 800, H = 200;
+      const m = { l: 40, r: 8, t: 8, b: 22 };
+      const iw = W - m.l - m.r, ih = H - m.t - m.b;
+      const max = niceMax(Math.max(1, ...data.map(d => d.ok + d.errors)));
+      const y = (v) => m.t + ih - (v / max) * ih;
+      const slot = iw / data.length;
+      const bw = Math.max(2, Math.min(28, slot - 2)); // 2px gap between adjacent columns
+      const fmtTick = (t) => bucket === 'hour'
+        ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+      let g = '';
+      for (const f of [0, 0.5, 1]) {
+        const v = max * f;
+        g += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="' + (f === 0 ? 'var(--axis)' : 'var(--grid)') + '" stroke-width="1"/>';
+        g += '<text x="' + (m.l - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + fmtNum(v) + '</text>';
+      }
+      const every = Math.ceil(data.length / Math.max(1, Math.floor(iw / 70)));
+      data.forEach((d, i) => {
+        const x = m.l + i * slot + (slot - bw) / 2;
+        if (i % every === 0) g += '<text x="' + (x + bw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + fmtTick(d.t) + '</text>';
+        const okTop = y(d.ok), errTop = y(d.ok + d.errors);
+        const top = d.errors ? 'err' : 'ok';
+        if (d.ok) g += bar(x, okTop, bw, y(0) - okTop, 'var(--ok)', top === 'ok');
+        // 2px surface gap between stacked segments
+        if (d.errors) g += bar(x, errTop, bw, Math.max(1, okTop - errTop - (d.ok ? 2 : 0)), 'var(--err)', true);
+        // Hit target: the whole column slot, taller than the mark
+        g += '<rect class="hit" data-i="' + i + '" x="' + (m.l + i * slot) + '" y="' + m.t + '" width="' + slot + '" height="' + ih + '" fill="transparent"/>';
+      });
+      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      svg.innerHTML = g;
+
+      const tip = $('tooltip');
+      svg.onmousemove = (e) => {
+        const hit = e.target.closest('.hit');
+        if (!hit) { tip.style.display = 'none'; return; }
+        const d = data[+hit.dataset.i];
+        const label = bucket === 'hour'
+          ? new Date(d.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : new Date(d.t).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+        tip.innerHTML = '<div style="font-weight:600;margin-bottom:0.2rem">' + label + '</div>' +
+          '<div><span class="k" style="background:var(--ok)"></span>Successful ' + fmtNum(d.ok) + '</div>' +
+          '<div><span class="k" style="background:var(--err)"></span>Errors ' + fmtNum(d.errors) + '</div>';
+        tip.style.display = 'block';
+        const box = svg.parentElement.getBoundingClientRect();
+        let left = e.clientX - box.left + 12;
+        if (left + tip.offsetWidth > box.width) left = e.clientX - box.left - tip.offsetWidth - 12;
+        tip.style.left = left + 'px';
+        tip.style.top = Math.max(0, e.clientY - box.top - tip.offsetHeight - 8) + 'px';
+      };
+      svg.onmouseleave = () => { tip.style.display = 'none'; };
+
+      $('series-table').innerHTML = '<thead><tr><th>' + (bucket === 'hour' ? 'Hour' : 'Day') + '</th><th class="num">Successful</th><th class="num">Errors</th></tr></thead><tbody>' +
+        data.filter(d => d.ok || d.errors).map(d => '<tr><td>' + fmtTick(d.t) + (bucket === 'hour' ? ' <span class="muted">' + new Date(d.t).toLocaleDateString() + '</span>' : '') + '</td><td class="num">' + fmtNum(d.ok) + '</td><td class="num">' + fmtNum(d.errors) + '</td></tr>').join('') + '</tbody>';
+    }
+
+    // Column with a 4px rounded top (data end) and a square base
+    function bar(x, yTop, w, h, fill, roundTop) {
+      if (h <= 0) return '';
+      const r = roundTop ? Math.min(4, w / 2, h) : 0;
+      const d = 'M' + x + ',' + (yTop + h) + ' V' + (yTop + r) +
+        (r ? ' Q' + x + ',' + yTop + ' ' + (x + r) + ',' + yTop + ' H' + (x + w - r) + ' Q' + (x + w) + ',' + yTop + ' ' + (x + w) + ',' + (yTop + r) : ' H' + (x + w)) +
+        ' V' + (yTop + h) + ' Z';
+      return '<path d="' + d + '" fill="' + fill + '"/>';
+    }
+
+    // --- log rows ---
+    function logRow(l) {
+      return '<tr class="clickable" data-log="' + l.id + '">' +
+        '<td style="white-space:nowrap">' + fmtTime(l.createdAt) + '</td>' +
+        '<td>' + clientLabel(l.clientId, l.clientName, l.keyPrefix) + '</td>' +
+        '<td class="mono">' + esc(l.method) + '</td>' +
+        '<td class="mono path" title="' + esc(l.path) + '">' + esc(l.path) + '</td>' +
+        '<td><span class="status ' + statusClass(l.statusCode) + '">' + l.statusCode + '</span></td>' +
+        '<td class="num">' + l.durationMs + ' ms</td>' +
+        '<td class="mono">' + esc(l.ip ?? '') + '</td></tr>';
+    }
+
+    function detailRow(l) {
+      let body = l.requestBody;
+      try { body = JSON.stringify(JSON.parse(body), null, 2); } catch { /* keep raw */ }
+      const rows = [
+        ['Time', fmtTime(l.createdAt)],
+        ['Client', clientLabel(l.clientId, l.clientName, l.keyPrefix)],
+        ['Key prefix', l.keyPrefix ? '<span class="mono">' + esc(l.keyPrefix) + '…</span>' : '—'],
+        ['Request', '<span class="mono">' + esc(l.method) + ' ' + esc(l.path) + '</span>'],
+        ['Endpoint', '<span class="mono">' + esc(l.route ?? '(unknown route)') + '</span>'],
+        ['Status', '<span class="status ' + statusClass(l.statusCode) + '">' + l.statusCode + '</span> in ' + l.durationMs + ' ms'],
+        ['IP', '<span class="mono">' + esc(l.ip ?? '—') + '</span>'],
+        ['User agent', esc(l.userAgent ?? '—')],
+        ['Error', l.error ? '<pre>' + esc(l.error) + '</pre>' : '—'],
+        ['Request body', body ? '<pre>' + esc(body) + '</pre>' : '—'],
+      ];
+      return '<tr class="detail"><td colspan="7"><dl class="detail-grid">' +
+        rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl></td></tr>';
+    }
+
+    let logsById = new Map();
+
+    async function loadLogs(append) {
+      const q = currentQuery();
+      if (append && nextBefore) q.set('before', nextBefore);
+      const res = await fetch('/api/api-logs?' + q);
+      if (!res.ok) return;
+      const { logs, nextBefore: nb } = await res.json();
+      if (!append) { logsById = new Map(); $('logs').innerHTML = ''; }
+      for (const l of logs) logsById.set(String(l.id), l);
+      $('logs').insertAdjacentHTML('beforeend', logs.map(logRow).join(''));
+      nextBefore = nb;
+      $('more').style.display = nb ? '' : 'none';
+      $('logs-empty').style.display = logsById.size ? 'none' : '';
+    }
+
+    $('logs').addEventListener('click', (e) => {
+      const row = e.target.closest('tr[data-log]');
+      if (!row) return;
+      const next = row.nextElementSibling;
+      if (next && next.classList.contains('detail')) { next.remove(); return; }
+      row.insertAdjacentHTML('afterend', detailRow(logsById.get(row.dataset.log)));
+    });
+
+    $('routes').addEventListener('click', (e) => {
+      const row = e.target.closest('tr[data-route]');
+      if (!row || !row.dataset.route) return;
+      $('f-route').value = row.dataset.route;
+      $('f-method').value = row.dataset.method;
+      refresh();
+    });
+
+    $('clients').addEventListener('click', (e) => {
+      const row = e.target.closest('tr[data-client]');
+      if (!row) return;
+      $('f-client').value = row.dataset.client;
+      refresh();
+    });
+
+    function refresh() {
+      syncUrl();
+      nextBefore = null;
+      return Promise.all([loadStats(), loadLogs(false)]);
+    }
+
+    let searchTimer;
+    for (const id of Object.values(FILTERS)) {
+      const el = $(id);
+      if (el.tagName === 'INPUT') el.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(refresh, 300); });
+      else el.addEventListener('change', refresh);
+    }
+    $('more').addEventListener('click', () => loadLogs(true));
+    $('f-reset').addEventListener('click', () => {
+      for (const id of Object.values(FILTERS)) $(id).value = '';
+      $('f-range').value = '24h';
+      refresh();
+    });
+    $('f-live').addEventListener('change', (e) => {
+      clearInterval(liveTimer);
+      if (e.target.checked) liveTimer = setInterval(refresh, 15000);
+    });
+    window.addEventListener('resize', () => { clearTimeout(window._rz); window._rz = setTimeout(loadStats, 200); });
+
+    (async () => {
+      applyUrlToFilters();
+      await loadClients();
+      applyUrlToFilters();
+      await refresh();
+    })();
+  </script>
+</body>
+</html>

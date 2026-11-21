@@ -14,5 +14,12 @@ export const config = {
   logLevel: (process.env.LOG_LEVEL || 'info') as 'debug' | 'info' | 'warn' | 'error',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || '',
+  /** Days to keep rows in shared.api_request_logs. */
+  apiLogRetentionDays: Math.max(1, parseInt(process.env.API_LOG_RETENTION_DAYS || '30', 10) || 30),
+  /**
+   * Proxy hops to trust for X-Forwarded-For (Railway's edge = 1), so logs and
+   * per-IP limits see the real client IP instead of the proxy's.
+   */
+  trustProxyHops: parseInt(process.env.TRUST_PROXY_HOPS || '1', 10) || 0,
   sessionSecret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
 }

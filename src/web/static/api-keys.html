@@ -7,7 +7,7 @@
   <meta name="csrf-token" content="{{CSRF_TOKEN}}" />
   <link rel="stylesheet" href="/static/shared.css" />
   <style>
-    .content { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    .content { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
     .back { color: #667781; text-decoration: none; font-size: 0.85rem; }
     .back:hover { text-decoration: underline; }
     .box {
@@ -17,21 +17,25 @@
       box-shadow: 0 1px 4px rgba(0,0,0,0.1);
       margin: 1rem 0;
     }
+    .box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .box-head h2 { margin: 0; }
     h2 { color: #1a1a1a; font-size: 1.1rem; margin: 0 0 1rem; }
     .hint { color: #667781; font-size: 0.85rem; margin: -0.5rem 0 1rem; }
     label { color: #667781; font-size: 0.85rem; }
     .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
-    input[type=text] {
-      flex: 1 1 220px;
+    input[type=text], input[type=number] {
       padding: 0.6rem 0.8rem;
       border: 1px solid #ddd;
       border-radius: 6px;
       font-size: 0.95rem;
       outline: none;
     }
-    input[type=text]:focus { border-color: #25d366; }
+    input[type=text] { flex: 1 1 220px; }
+    input[type=number] { width: 6rem; }
+    input:focus { border-color: #25d366; }
     .scopes { display: flex; gap: 1rem; }
     .scopes label { color: #1a1a1a; display: flex; gap: 0.3rem; align-items: center; }
+    .limit { display: flex; gap: 0.4rem; align-items: center; }
     .btn {
       padding: 0.6rem 1.2rem;
       background: #25d366;
@@ -42,8 +46,13 @@
       cursor: pointer;
     }
     .btn:hover { background: #1da851; }
-    .btn-danger { background: none; color: #e74c3c; border: 1px solid #e74c3c; padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+    .btn-secondary { background: #667781; }
+    .btn-secondary:hover { background: #55636c; }
+    .btn-small { padding: 0.3rem 0.7rem; font-size: 0.8rem; background: none; border: 1px solid #ccc; color: #1a1a1a; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block; }
+    .btn-small:hover { background: #f0f2f5; }
+    .btn-danger { color: #e74c3c; border-color: #e74c3c; }
     .btn-danger:hover { background: #fdf0f0; }
+    .actions { display: flex; gap: 0.35rem; flex-wrap: nowrap; }
     .msg { font-size: 0.85rem; margin: 0.75rem 0 0; min-height: 1em; }
     .msg-ok { color: #25d366; }
     .msg-err { color: #e74c3c; }
@@ -62,9 +71,21 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th { text-align: left; color: #667781; font-weight: 500; padding: 0.5rem; border-bottom: 1px solid #eee; white-space: nowrap; }
     td { padding: 0.5rem; border-bottom: 1px solid #f3f3f3; vertical-align: middle; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     tr.revoked td { color: #aaa; }
+    td.nowrap { white-space: nowrap; }
     .tag { display: inline-block; background: #f0f2f5; border-radius: 4px; padding: 0.1rem 0.4rem; margin-right: 0.25rem; font-size: 0.8rem; }
+    .warn { color: #a32424; }
+    .muted { color: #667781; }
+    .small { font-size: 0.8rem; }
     .empty { color: #667781; font-size: 0.9rem; }
+    .notice { background: #fdf0f0; border: 1px solid #f3c4c4; border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.85rem; color: #7a1f1f; margin-bottom: 1rem; display: none; }
+    .notice a { color: inherit; }
+    dialog { border: none; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); padding: 1.5rem 2rem; max-width: 460px; width: calc(100% - 2rem); }
+    dialog::backdrop { background: rgba(0,0,0,0.3); }
+    dialog .field { margin-bottom: 1rem; }
+    dialog .field > label { display: block; margin-bottom: 0.35rem; }
+    dialog .buttons { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; }
   </style>
 </head>
 <body>
@@ -84,6 +105,10 @@
             <label><input type="checkbox" name="scope" value="send" /> send</label>
             <label><input type="checkbox" name="scope" value="settings" /> settings</label>
           </div>
+        </div>
+        <div class="row" style="margin-top:0.75rem">
+          <label class="limit">Requests / min <input type="number" id="rate" value="60" min="1" max="10000" required /></label>
+          <label class="limit">Sends / min <input type="number" id="send" value="10" min="1" max="1000" required /></label>
           <button type="submit" class="btn">Create</button>
         </div>
         <p class="msg" id="msg"></p>
@@ -95,15 +120,23 @@
       <p class="hint" style="margin:0">Copy it now. It won't be shown again.</p>
       <code id="new-key-value"></code>
       <button class="btn" onclick="copyKey()">Copy</button>
-      <button class="btn" style="background:#667781" onclick="hideNewKey()">Done</button>
+      <button class="btn btn-secondary" onclick="hideNewKey()">Done</button>
     </div>
 
     <div class="box">
-      <h2>Clients</h2>
+      <div class="box-head">
+        <h2>Clients</h2>
+        <a class="btn-small" href="/api-keys/logs">View all request logs &rarr;</a>
+      </div>
+      <div class="notice" id="unknown-notice"></div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Name</th><th>Key</th><th>Scopes</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr>
+            <tr>
+              <th>Name</th><th>Key</th><th>Scopes</th><th>Limits</th>
+              <th class="num">Requests 24h</th><th class="num">Errors 24h</th><th class="num">429s 24h</th>
+              <th>Last used</th><th>Status</th><th></th>
+            </tr>
           </thead>
           <tbody id="clients"></tbody>
         </table>
@@ -111,30 +144,79 @@
       <p class="empty" id="empty" style="display:none">No API keys yet.</p>
     </div>
   </div>
+
+  <dialog id="edit-dialog">
+    <form id="edit-form">
+      <h2>Edit <span id="edit-name"></span></h2>
+      <div class="field">
+        <label>Scopes</label>
+        <div class="scopes">
+          <label><input type="checkbox" name="edit-scope" value="read" /> read</label>
+          <label><input type="checkbox" name="edit-scope" value="send" /> send</label>
+          <label><input type="checkbox" name="edit-scope" value="settings" /> settings</label>
+        </div>
+      </div>
+      <div class="field row">
+        <label class="limit">Requests / min <input type="number" id="edit-rate" min="1" max="10000" required /></label>
+        <label class="limit">Sends / min <input type="number" id="edit-send" min="1" max="1000" required /></label>
+      </div>
+      <p class="hint" style="margin:0 0 0.5rem">Changes apply within seconds. The key itself stays the same.</p>
+      <p class="msg" id="edit-msg"></p>
+      <div class="buttons">
+        <button type="button" class="btn btn-secondary" id="edit-cancel">Cancel</button>
+        <button type="submit" class="btn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    let clientsById = new Map();
+    let editingId = null;
 
     function esc(s) {
-      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
     function fmt(d) { return d ? new Date(d).toLocaleString() : '—'; }
+    const num = (n) => Number(n).toLocaleString();
 
     async function load() {
       const res = await fetch('/api/api-keys');
       if (res.status === 401) { window.location.href = '/login'; return; }
-      const { clients } = await res.json();
+      const { clients, unknownKeys24h } = await res.json();
+      clientsById = new Map(clients.map(c => [String(c.id), c]));
       const tbody = document.getElementById('clients');
       document.getElementById('empty').style.display = clients.length ? 'none' : '';
+
+      const notice = document.getElementById('unknown-notice');
+      if (unknownKeys24h.total > 0) {
+        notice.innerHTML = '<strong>' + num(unknownKeys24h.total) + '</strong> request(s) in the last 24h used an invalid or revoked key. ' +
+          '<a href="/api-keys/logs?client=unknown">See them</a>';
+        notice.style.display = 'block';
+      } else {
+        notice.style.display = 'none';
+      }
+
       tbody.innerHTML = clients.map(c => {
         const revoked = !!c.revokedAt;
+        const u = c.usage24h;
+        const logs = '<a class="btn-small" href="/api-keys/logs?client=' + c.id + '">Logs</a>';
+        const actions = revoked
+          ? logs
+          : logs +
+            '<button class="btn-small" data-edit-id="' + c.id + '">Edit</button>' +
+            '<button class="btn-small btn-danger" data-revoke-id="' + c.id + '">Revoke</button>';
         return '<tr class="' + (revoked ? 'revoked' : '') + '">' +
-          '<td>' + esc(c.name) + '</td>' +
-          '<td><code>' + esc(c.keyPrefix) + '…</code></td>' +
+          '<td class="nowrap">' + esc(c.name) + '</td>' +
+          '<td class="nowrap"><code>' + esc(c.keyPrefix) + '…</code></td>' +
           '<td>' + c.scopes.map(s => '<span class="tag">' + esc(s) + '</span>').join('') + '</td>' +
-          '<td>' + fmt(c.createdAt) + '</td>' +
+          '<td class="small" style="white-space:nowrap">' + num(c.rateLimitPerMin) + ' req/min<br><span class="muted">' + num(c.sendLimitPerMin) + ' sends/min</span></td>' +
+          '<td class="num">' + num(u.total) + '</td>' +
+          '<td class="num' + (u.errors ? ' warn' : '') + '">' + num(u.errors) + '</td>' +
+          '<td class="num' + (u.rateLimited ? ' warn' : '') + '">' + num(u.rateLimited) + '</td>' +
           '<td>' + fmt(c.lastUsedAt) + '</td>' +
           '<td>' + (revoked ? 'Revoked ' + fmt(c.revokedAt) : 'Active') + '</td>' +
-          '<td>' + (revoked ? '' : '<button class="btn btn-danger" data-revoke-id="' + c.id + '" data-revoke-name="' + esc(c.name) + '">Revoke</button>') + '</td>' +
+          '<td><div class="actions">' + actions + '</div></td>' +
           '</tr>';
       }).join('');
     }
@@ -143,28 +225,34 @@
       e.preventDefault();
       const name = document.getElementById('name').value.trim();
       const scopes = [...document.querySelectorAll('input[name=scope]:checked')].map(i => i.value);
-      if (!scopes.length) { showMsg('Select at least one scope', false); return; }
+      if (!scopes.length) { showMsg('msg', 'Select at least one scope', false); return; }
       try {
         const res = await fetch('/api/api-keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-          body: JSON.stringify({ name, scopes }),
+          body: JSON.stringify({
+            name,
+            scopes,
+            rateLimitPerMin: Number(document.getElementById('rate').value),
+            sendLimitPerMin: Number(document.getElementById('send').value),
+          }),
         });
         const data = await res.json();
-        if (!res.ok) { showMsg(data.error || 'Failed to create key', false); return; }
+        if (!res.ok) { showMsg('msg', data.error || 'Failed to create key', false); return; }
         document.getElementById('new-key-name').textContent = data.client.name;
         document.getElementById('new-key-value').textContent = data.key;
         document.getElementById('new-key-box').style.display = 'block';
         document.getElementById('create-form').reset();
-        showMsg('Key created', true);
+        showMsg('msg', 'Key created', true);
         load();
       } catch {
-        showMsg('Failed to create key', false);
+        showMsg('msg', 'Failed to create key', false);
       }
     }
 
-    async function revokeKey(id, name) {
-      if (!confirm('Revoke the key for "' + name + '"? Requests using it will fail immediately.')) return;
+    async function revokeKey(id) {
+      const c = clientsById.get(String(id));
+      if (!c || !confirm('Revoke the key for "' + c.name + '"? Requests using it will fail immediately.')) return;
       const res = await fetch('/api/api-keys/' + id, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -173,15 +261,51 @@
       load();
     }
 
+    // --- edit dialog ---
+    const dialog = document.getElementById('edit-dialog');
+    function openEdit(id) {
+      const c = clientsById.get(String(id));
+      if (!c) return;
+      editingId = c.id;
+      document.getElementById('edit-name').textContent = c.name;
+      for (const cb of document.querySelectorAll('input[name=edit-scope]')) cb.checked = c.scopes.includes(cb.value);
+      document.getElementById('edit-rate').value = c.rateLimitPerMin;
+      document.getElementById('edit-send').value = c.sendLimitPerMin;
+      document.getElementById('edit-msg').textContent = '';
+      dialog.showModal();
+    }
+    document.getElementById('edit-cancel').addEventListener('click', () => dialog.close());
+    document.getElementById('edit-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const scopes = [...document.querySelectorAll('input[name=edit-scope]:checked')].map(i => i.value);
+      if (!scopes.length) { showMsg('edit-msg', 'Select at least one scope', false); return; }
+      const res = await fetch('/api/api-keys/' + editingId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+        body: JSON.stringify({
+          scopes,
+          rateLimitPerMin: Number(document.getElementById('edit-rate').value),
+          sendLimitPerMin: Number(document.getElementById('edit-send').value),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showMsg('edit-msg', data.error || 'Failed to save', false); return; }
+      dialog.close();
+      showMsg('msg', 'Saved changes to ' + data.client.name, true);
+      load();
+    });
+
     document.getElementById('clients').addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-revoke-id]');
-      if (btn) revokeKey(btn.dataset.revokeId, btn.dataset.revokeName);
+      const revoke = e.target.closest('[data-revoke-id]');
+      if (revoke) return revokeKey(revoke.dataset.revokeId);
+      const edit = e.target.closest('[data-edit-id]');
+      if (edit) openEdit(edit.dataset.editId);
     });
 
     async function copyKey() {
       const value = document.getElementById('new-key-value').textContent;
-      try { await navigator.clipboard.writeText(value); showMsg('Copied to clipboard', true); }
-      catch { showMsg('Copy failed. Select the key and copy it manually.', false); }
+      try { await navigator.clipboard.writeText(value); showMsg('msg', 'Copied to clipboard', true); }
+      catch { showMsg('msg', 'Copy failed. Select the key and copy it manually.', false); }
     }
 
     function hideNewKey() {
@@ -189,8 +313,8 @@
       document.getElementById('new-key-box').style.display = 'none';
     }
 
-    function showMsg(text, ok) {
-      const el = document.getElementById('msg');
+    function showMsg(id, text, ok) {
+      const el = document.getElementById(id);
       el.textContent = text;
       el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
       setTimeout(() => { el.textContent = ''; }, 3000);

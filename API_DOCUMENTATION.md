@@ -202,6 +202,7 @@ curl -X GET http://localhost:3000/api/messages/sent \
 | 400 | Bad Request | Missing recipient or text, message too long |
 | 401 | Unauthorized | Invalid API key or no session |
 | 403 | Forbidden | API key lacks the required scope, or invalid CSRF token (session auth) |
+| 429 | Too Many Requests | Rate limit or send limit reached (see Rate Limiting) |
 | 503 | Service Unavailable | WhatsApp not connected |
 
 ### Error Responses
@@ -262,6 +263,13 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin
 DATA_DIR=./data
 LOG_LEVEL=info
+
+# Days to keep API request logs (default 30). Older rows are deleted daily.
+API_LOG_RETENTION_DAYS=30
+
+# Proxy hops in front of the app, so logs see the real client IP (default 1 = Railway's edge).
+# Set to 0 when running without a proxy.
+TRUST_PROXY_HOPS=1
 ```
 
 ---
@@ -328,7 +336,52 @@ Import `postman_collection.json` for pre-configured requests:
 
 ## Rate Limiting
 
-WhatsApp enforces rate limits (~80 messages per day per number). The API does not enforce additional limits but logs all attempts.
+Each API key has two limits, both counted over a sliding 60-second window and editable per key on the `/api-keys` page:
+
+| Limit | Default | Counts |
+|-------|---------|--------|
+| Requests / min | 60 | Every request made with the key |
+| Sends / min | 10 | `POST /api/messages/send` and `POST /api/groups/:jid/send` |
+
+The send limit protects the WhatsApp number: sending too fast can get it banned by WhatsApp. Changes to limits apply within seconds; the key itself doesn't change.
+
+Every API-key response carries these headers:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 57
+X-RateLimit-Reset: 42          # seconds until the oldest request leaves the window
+```
+
+Send endpoints also return `X-SendLimit-Limit` and `X-SendLimit-Remaining`.
+
+Over a limit, the API returns `429` with a `Retry-After` header (seconds):
+
+```json
+{ "error": "Rate limit exceeded: 10 sends per minute", "limit": 10, "retryAfterSec": 23 }
+```
+
+Clients should wait `Retry-After` seconds before retrying. Rejected requests don't count toward the limit.
+
+Invalid keys are throttled too: after 20 failed key attempts in a minute from one IP, further invalid attempts get `429`. Valid keys from that IP keep working.
+
+Admin dashboard (session) requests are not rate limited. Limits are kept in memory, so they reset when the service restarts.
+
+---
+
+## Request Logs
+
+Every request that sends an `X-API-Key` header is logged, whether it succeeds, fails, is rate limited or uses an invalid key. Admins can see them at **⋮ → API Keys → View all request logs** (`/api-keys/logs`), or **Logs** on a single client's row.
+
+The logs page shows, for any client, time range (1h, 24h, 7d, 30d), status, method, endpoint or path search:
+- Totals: request count, success rate, 4xx, 429 and 5xx counts, average and p95 latency
+- Requests over time (successful vs. errors)
+- Top endpoints and per-client breakdown (click a row to filter)
+- Each request: time, client, method, path, status, duration, IP; click for user agent, request body and error message
+
+Each row stores: client, the key's first 8 characters (never the full key), method, endpoint, full path with query, status, duration, IP, user agent, request body (up to 4KB) and error message. Request bodies include message text and phone numbers, so treat the logs page as sensitive.
+
+Logs are kept for 30 days (`API_LOG_RETENTION_DAYS`).
 
 ---
 

@@ -13,6 +13,7 @@ import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import { getSettingOrDefault } from '../db/queries/settings.js'
 import { registerRoutes } from './routes/index.js'
+import { registerRequestLogging, startLogRetention } from './request-logging.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const staticDir = resolve(__dirname, 'static')
@@ -47,7 +48,7 @@ export function cleanupTmpUploads() {
 
 export async function startWebServer() {
   cleanupTmpUploads()
-  const app = Fastify({ logger: false })
+  const app = Fastify({ logger: false, trustProxy: config.trustProxyHops || false })
 
   await app.register(fastifyFormbody)
   await app.register(fastifyMultipart, { limits: { fileSize: 200 * 1024 * 1024 } })
@@ -68,7 +69,9 @@ export async function startWebServer() {
     prefix: '/static/',
   })
 
+  registerRequestLogging(app)
   registerRoutes(app)
+  startLogRetention()
 
   await app.listen({ port: config.port, host: config.host })
   logger.info(`Web server listening on http://${config.host}:${config.port}`)

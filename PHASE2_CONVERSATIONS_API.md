@@ -65,7 +65,7 @@ DM conversation:
 **Example curl:**
 ```bash
 curl -X GET http://localhost:3000/api/conversations \
-  -H "X-API-Key: PC0muZZ6myKIdIsx6ThHUdw0vSuALdm4"
+  -H "X-API-Key: bwa_your-client-key"
 ```
 
 ---
@@ -132,20 +132,20 @@ curl -X GET http://localhost:3000/api/conversations \
 **Example curl - Group:**
 ```bash
 curl -X GET "http://localhost:3000/api/conversations/120363408247627931@g.us/messages?limit=20" \
-  -H "X-API-Key: PC0muZZ6myKIdIsx6ThHUdw0vSuALdm4"
+  -H "X-API-Key: bwa_your-client-key"
 ```
 
 **Example curl - DM:**
 ```bash
 curl -X GET "http://localhost:3000/api/conversations/628116191899@s.whatsapp.net/messages?limit=20" \
-  -H "X-API-Key: PC0muZZ6myKIdIsx6ThHUdw0vSuALdm4"
+  -H "X-API-Key: bwa_your-client-key"
 ```
 
 **Example curl - With pagination cursor:**
 ```bash
 CURSOR="1779113200"
 curl -X GET "http://localhost:3000/api/conversations/120363408247627931@g.us/messages?limit=20&before=$CURSOR" \
-  -H "X-API-Key: PC0muZZ6myKIdIsx6ThHUdw0vSuALdm4"
+  -H "X-API-Key: bwa_your-client-key"
 ```
 
 ---
@@ -233,7 +233,7 @@ curl -X GET "http://localhost:3000/api/conversations/120363408247627931@g.us/mes
 ## Pagination Example (Node.js)
 
 ```javascript
-const API_KEY = 'PC0muZZ6myKIdIsx6ThHUdw0vSuALdm4'
+const API_KEY = 'bwa_your-client-key'
 
 async function getConversationHistory(conversationId) {
   const messages = []
@@ -278,7 +278,7 @@ Use together with Phase 1 endpoints:
 
 **Quick test all endpoints:**
 ```bash
-API_KEY="PC0muZZ6myKIdIsx6ThHUdw0vSuALdm4"
+API_KEY="bwa_your-client-key"
 
 # List conversations
 curl -s http://localhost:3000/api/conversations \

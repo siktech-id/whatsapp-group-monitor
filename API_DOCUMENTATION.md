@@ -10,19 +10,27 @@ Phase 1 implementation provides REST API endpoints to send WhatsApp messages to 
 ## Authentication
 
 ### API Key Authentication (Recommended for Developers)
-Pass the API key in the `X-API-Key` header:
+Each client platform gets its **own** API key. Pass it in the `X-API-Key` header:
 
 ```bash
-curl -H "X-API-Key: your-api-key" http://localhost:3000/api/messages/send
+curl -H "X-API-Key: bwa_xxxxxxxx..." http://localhost:3000/api/groups
 ```
 
-**Default API Key:** `dev-key-change-in-production`
+**Getting a key:** an admin logs in to the dashboard, opens **⋮ → API Keys** (`/api-keys`), enters a client name, picks scopes and clicks **Create**. The full key is shown **once**. Only a SHA-256 hash is stored, so a lost key can't be recovered. Revoke it and create a new one instead.
 
-**Setting Custom API Key:**
-```bash
-export API_KEY="your-secure-key"
-npm run dev
-```
+**Revoking a key:** click **Revoke** on the API Keys page. Requests using that key fail with `401` within seconds.
+
+**Scopes:** each key grants a subset of these:
+
+| Scope | Endpoints |
+|-------|-----------|
+| `read` | `GET /api/groups`, `GET /api/groups/:jid`, `GET /api/users/:jid`, `GET /api/conversations`, `GET /api/conversations/:id/messages`, `GET /api/messages/sent` |
+| `send` | `POST /api/messages/send`, `POST /api/groups/:jid/send` |
+| `settings` | `GET /api/settings`, `POST /api/settings` |
+
+A request to an endpoint outside the key's scopes returns `403`. `/api/status` and the backup endpoints accept only an admin session, never an API key.
+
+**Per-client data:** each outgoing message records which client sent it. When called with an API key, `GET /api/messages/sent` returns only that client's own messages. Groups, users and conversations are shared, because they come from the same WhatsApp account.
 
 ### Session Authentication (For Web Dashboard)
 1. Login via web dashboard at `http://localhost:3000/login`
@@ -37,7 +45,7 @@ npm run dev
 
 **Endpoint:** `POST /api/messages/send`
 
-**Authentication:** API Key OR Session + CSRF
+**Authentication:** API Key (scope `send`) OR Session + CSRF
 
 **Request:**
 ```json
@@ -76,7 +84,7 @@ With API Key:
 ```bash
 curl -X POST http://localhost:3000/api/messages/send \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-key-change-in-production" \
+  -H "X-API-Key: bwa_your-client-key" \
   -d '{
     "recipient": "628116191899",
     "text": "Hello from API!"
@@ -101,7 +109,7 @@ curl -X POST http://localhost:3000/api/messages/send \
 
 **Endpoint:** `POST /api/groups/:jid/send`
 
-**Authentication:** API Key OR Session + CSRF
+**Authentication:** API Key (scope `send`) OR Session + CSRF
 
 **URL Parameter:**
 | Field | Type | Required | Description |
@@ -130,7 +138,7 @@ curl -X POST http://localhost:3000/api/messages/send \
 # With API Key
 curl -X POST http://localhost:3000/api/groups/120363408247627931@g.us/send \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-key-change-in-production" \
+  -H "X-API-Key: bwa_your-client-key" \
   -d '{"text": "Group message!"}'
 
 # With Session
@@ -147,7 +155,7 @@ curl -X POST http://localhost:3000/api/groups/120363408247627931@g.us/send \
 
 **Endpoint:** `GET /api/messages/sent`
 
-**Authentication:** API Key OR Session + CSRF
+**Authentication:** API Key (scope `read`) OR Session
 
 **Response:**
 ```json
@@ -174,7 +182,7 @@ curl -X POST http://localhost:3000/api/groups/120363408247627931@g.us/send \
 ```bash
 # With API Key
 curl -X GET http://localhost:3000/api/messages/sent \
-  -H "X-API-Key: dev-key-change-in-production"
+  -H "X-API-Key: bwa_your-client-key"
 
 # With Session
 curl -X GET http://localhost:3000/api/messages/sent \
@@ -193,7 +201,7 @@ curl -X GET http://localhost:3000/api/messages/sent \
 | 200 | Success | Message sent successfully |
 | 400 | Bad Request | Missing recipient or text, message too long |
 | 401 | Unauthorized | Invalid API key or no session |
-| 403 | Forbidden | Invalid CSRF token (session auth only) |
+| 403 | Forbidden | API key lacks the required scope, or invalid CSRF token (session auth) |
 | 503 | Service Unavailable | WhatsApp not connected |
 
 ### Error Responses
@@ -202,6 +210,13 @@ curl -X GET http://localhost:3000/api/messages/sent \
 ```json
 {
   "error": "Unauthorized: Invalid or missing API key"
+}
+```
+
+**Missing Scope:**
+```json
+{
+  "error": "Forbidden: missing scope 'send'"
 }
 ```
 
@@ -239,10 +254,8 @@ curl -X GET http://localhost:3000/api/messages/sent \
 ## Environment Variables
 
 ```bash
-# API Key for authentication (default: "dev-key-change-in-production")
-API_KEY=your-secure-key
+# API keys are managed in the dashboard (/api-keys), not via environment variables.
 
-# Other existing variables
 PORT=3000
 HOST=0.0.0.0
 ADMIN_USERNAME=admin
@@ -307,7 +320,7 @@ Import `postman_collection.json` for pre-configured requests:
 3. Session auth flow (optional)
 
 **Quick start:**
-1. Set `api_key` variable to your API key
+1. Set `api_key` variable to a key created on the `/api-keys` page
 2. Send "Send Message to Individual" request
 3. Or use "Message Sending (API Key)" folder for all endpoints
 
@@ -321,8 +334,8 @@ WhatsApp enforces rate limits (~80 messages per day per number). The API does no
 
 ## Security Notes
 
-- **API Key:** Keep `API_KEY` environment variable secret in production
-- **Change Default Key:** Default key `dev-key-change-in-production` is for development only
+- **API Keys:** Use one key per client platform, and give each the fewest scopes it needs. Revoke a key as soon as it's no longer used or may have leaked.
+- **Storage:** Only SHA-256 hashes of keys are stored, in `shared.api_clients`.
 - **HTTPS:** Use HTTPS in production (not http://)
 - **Headers:** Validate `X-API-Key` header case-insensitively
 - **Messages:** All messages are logged in the database for audit trails
@@ -333,7 +346,7 @@ WhatsApp enforces rate limits (~80 messages per day per number). The API does no
 
 ### "Unauthorized: Invalid API key"
 - Verify `X-API-Key` header is included
-- Confirm API key matches environment variable
+- Confirm the key was copied in full and hasn't been revoked (check the `/api-keys` page)
 - Check header is spelled correctly (case-sensitive)
 
 ### "Not connected"
@@ -357,7 +370,7 @@ WhatsApp enforces rate limits (~80 messages per day per number). The API does no
 ```bash
 curl -X POST http://localhost:3000/api/messages/send \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-key-change-in-production" \
+  -H "X-API-Key: bwa_your-client-key" \
   -d '{
     "recipient": "628116191899",
     "text": "Line 1\nLine 2\nLine 3"
@@ -369,7 +382,7 @@ curl -X POST http://localhost:3000/api/messages/send \
 for number in 628116191899 628119876543 62811234567; do
   curl -X POST http://localhost:3000/api/messages/send \
     -H "Content-Type: application/json" \
-    -H "X-API-Key: dev-key-change-in-production" \
+    -H "X-API-Key: bwa_your-client-key" \
     -d "{\"recipient\":\"$number\",\"text\":\"Broadcast message\"}"
 done
 ```
@@ -383,7 +396,7 @@ async function sendWhatsAppMessage(recipient, text) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': 'dev-key-change-in-production',
+      'X-API-Key': 'bwa_your-client-key',
     },
     body: JSON.stringify({ recipient, text }),
   });

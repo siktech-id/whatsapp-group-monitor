@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { getSock } from '../../whatsapp/client.js'
 import { isAccountDbReady } from '../../db/account.js'
-import { requireAuthApi, requireApiKey, requireApiKeyOrSession, verifyCsrf } from '../middleware/auth.js'
+import { requireApiKeyOrSession, requireScope, isApiKeyRequest, verifyCsrf } from '../middleware/auth.js'
 import { insertOutgoingMessage, updateOutgoingMessageStatus, getRecentOutgoingMessages } from '../../db/queries/outgoing-messages.js'
 import { logger } from '../../utils/logger.js'
 
@@ -10,16 +10,12 @@ function normalizeRecipient(recipient: string): string {
   return `${recipient}@s.whatsapp.net`
 }
 
-function isApiKeyAuth(req: any): boolean {
-  return !!req.headers['x-api-key']
-}
-
 export function registerMessageRoutes(app: FastifyInstance) {
   app.post<{ Body: { recipient: string; text: string } }>(
     '/api/messages/send',
-    { preHandler: [requireApiKeyOrSession] },
+    { preHandler: [requireApiKeyOrSession, requireScope('send')] },
     async (req, reply) => {
-      if (!isApiKeyAuth(req) && !verifyCsrf(req)) {
+      if (!isApiKeyRequest(req) && !verifyCsrf(req)) {
         return reply.status(403).send({ error: 'Invalid CSRF token' })
       }
 
@@ -38,7 +34,7 @@ export function registerMessageRoutes(app: FastifyInstance) {
       }
 
       const normalizedRecipient = normalizeRecipient(recipient)
-      const messageId = await insertOutgoingMessage(normalizedRecipient, text)
+      const messageId = await insertOutgoingMessage(normalizedRecipient, text, req.apiClient?.id)
 
       try {
         const sock = getSock()
@@ -48,7 +44,7 @@ export function registerMessageRoutes(app: FastifyInstance) {
           whatsappMessageId: sentMessage?.key?.id || undefined,
         })
 
-        logger.info({ messageId, recipient: normalizedRecipient }, 'Message sent')
+        logger.info({ messageId, recipient: normalizedRecipient, client: req.apiClient?.name ?? 'admin' }, 'Message sent')
         return reply.send({ ok: true, messageId, whatsappMessageId: sentMessage?.key?.id || null })
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error'
@@ -62,9 +58,9 @@ export function registerMessageRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { jid: string }; Body: { text: string } }>(
     '/api/groups/:jid/send',
-    { preHandler: [requireApiKeyOrSession] },
+    { preHandler: [requireApiKeyOrSession, requireScope('send')] },
     async (req, reply) => {
-      if (!isApiKeyAuth(req) && !verifyCsrf(req)) {
+      if (!isApiKeyRequest(req) && !verifyCsrf(req)) {
         return reply.status(403).send({ error: 'Invalid CSRF token' })
       }
 
@@ -83,7 +79,7 @@ export function registerMessageRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Message too long (max 16KB)' })
       }
 
-      const messageId = await insertOutgoingMessage(jid, text)
+      const messageId = await insertOutgoingMessage(jid, text, req.apiClient?.id)
 
       try {
         const sock = getSock()
@@ -93,7 +89,7 @@ export function registerMessageRoutes(app: FastifyInstance) {
           whatsappMessageId: sentMessage?.key?.id || undefined,
         })
 
-        logger.info({ messageId, groupJid: jid }, 'Group message sent')
+        logger.info({ messageId, groupJid: jid, client: req.apiClient?.name ?? 'admin' }, 'Group message sent')
         return reply.send({ ok: true, messageId, whatsappMessageId: sentMessage?.key?.id || null })
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error'
@@ -107,13 +103,14 @@ export function registerMessageRoutes(app: FastifyInstance) {
 
   app.get(
     '/api/messages/sent',
-    { preHandler: [requireApiKeyOrSession] },
-    async (_req, reply) => {
+    { preHandler: [requireApiKeyOrSession, requireScope('read')] },
+    async (req, reply) => {
       if (!isAccountDbReady()) {
         return reply.status(503).send({ error: 'Not connected' })
       }
 
-      const messages = getRecentOutgoingMessages(50)
+      // API clients only see their own sends; admin sessions see everything
+      const messages = await getRecentOutgoingMessages(50, req.apiClient?.id)
       return reply.send({ messages })
     }
   )

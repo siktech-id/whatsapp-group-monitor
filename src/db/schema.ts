@@ -10,6 +10,22 @@ export const settings = sharedSchema.table('settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 })
 
+export const apiScopes = ['read', 'send', 'settings'] as const
+export type ApiScope = typeof apiScopes[number]
+
+export const apiClients = sharedSchema.table('api_clients', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  keyPrefix: text('key_prefix').notNull(),
+  keyHash: text('key_hash').notNull().unique(),
+  scopes: text('scopes').array().notNull().$type<ApiScope[]>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+})
+
+export type ApiClient = typeof apiClients.$inferSelect
+
 // --- Account DB (all operational tables in account schema) ---
 
 export const accountSchema = pgSchema('account')
@@ -87,6 +103,7 @@ export const outgoingMessages = accountSchema.table('outgoing_messages', {
   status: text('status', { enum: ['pending', 'sent', 'failed'] }).notNull().default('pending'),
   whatsappMessageId: text('whatsapp_message_id'),
   error: text('error'),
+  clientId: integer('client_id'),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 })

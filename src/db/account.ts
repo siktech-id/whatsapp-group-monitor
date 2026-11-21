@@ -104,6 +104,8 @@ export async function initAccountDb(phone: string) {
       );
 
       CREATE INDEX IF NOT EXISTS idx_outgoing_recipient ON account.outgoing_messages(recipient);
+      ALTER TABLE account.outgoing_messages ADD COLUMN IF NOT EXISTS client_id INTEGER;
+      CREATE INDEX IF NOT EXISTS idx_outgoing_client ON account.outgoing_messages(client_id, created_at);
 
       CREATE TABLE IF NOT EXISTS account.incoming_messages (
         id SERIAL PRIMARY KEY,

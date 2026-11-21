@@ -29,6 +29,20 @@ export async function initSharedDb() {
       )
     `)
 
+    // Per-client API keys (only SHA-256 hashes are stored)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS shared.api_clients (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        key_prefix TEXT NOT NULL,
+        key_hash TEXT NOT NULL UNIQUE,
+        scopes TEXT[] NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        last_used_at TIMESTAMPTZ,
+        revoked_at TIMESTAMPTZ
+      )
+    `)
+
     logger.info('Shared database initialized')
   } catch (err) {
     logger.error({ error: err }, 'Failed to initialize shared database')

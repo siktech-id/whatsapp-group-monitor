@@ -4,7 +4,7 @@ import { config } from '../../config.js'
 import { sendPage } from '../server.js'
 import { getCurrentQr, getConnectionState, getBotUser } from '../../whatsapp/handlers/connection.js'
 import { getSock, reconnect } from '../../whatsapp/client.js'
-import { requireAuth, requireAuthApi, requireApiKeyOrSession, generateCsrf, verifyCsrf } from '../middleware/auth.js'
+import { requireAuth, requireAuthApi, requireApiKeyOrSession, requireScope, isApiKeyRequest, generateCsrf, verifyCsrf } from '../middleware/auth.js'
 import { getSettingOrDefault, setSetting } from '../../db/queries/settings.js'
 import { getAllGroups, getGroup } from '../../db/queries/groups.js'
 import { GroupRecord } from '../../whatsapp/group/record.js'
@@ -16,11 +16,13 @@ import { getUserActivityPerGroup } from '../../db/queries/activity.js'
 import { registerBackupRoutes } from './backup.js'
 import { registerMessageRoutes } from './messages.js'
 import { registerConversationRoutes } from './conversations.js'
+import { registerApiKeyRoutes } from './api-keys.js'
 
 export function registerRoutes(app: FastifyInstance) {
   registerBackupRoutes(app)
   registerMessageRoutes(app)
   registerConversationRoutes(app)
+  registerApiKeyRoutes(app)
   // --- Public: login ---
   app.get('/login', async (req, reply) => {
     if (req.session.authenticated) {
@@ -103,15 +105,15 @@ export function registerRoutes(app: FastifyInstance) {
     return await sendPage(reply, 'messaging.html', req)
   })
 
-  app.get('/api/settings', { preHandler: requireApiKeyOrSession }, async (_req, reply) => {
+  app.get('/api/settings', { preHandler: [requireApiKeyOrSession, requireScope('settings')] }, async (_req, reply) => {
     return reply.send({
       project_name: await getSettingOrDefault('project_name', 'WhatsApp Group Monitor'),
       page_size: await getSettingOrDefault('page_size', '50'),
     })
   })
 
-  app.post('/api/settings', { preHandler: requireApiKeyOrSession }, async (req, reply) => {
-    if (!verifyCsrf(req)) {
+  app.post('/api/settings', { preHandler: [requireApiKeyOrSession, requireScope('settings')] }, async (req, reply) => {
+    if (!isApiKeyRequest(req) && !verifyCsrf(req)) {
       return reply.status(403).send({ error: 'Invalid CSRF token' })
     }
     const body = req.body as Record<string, string>
@@ -125,7 +127,7 @@ export function registerRoutes(app: FastifyInstance) {
   })
 
   // --- Protected API ---
-  app.get('/api/groups', { preHandler: requireApiKeyOrSession }, async (_req, reply) => {
+  app.get('/api/groups', { preHandler: [requireApiKeyOrSession, requireScope('read')] }, async (_req, reply) => {
     if (!isAccountDbReady()) {
       return reply.send({ groups: [] })
     }
@@ -139,7 +141,7 @@ export function registerRoutes(app: FastifyInstance) {
     return await sendPage(reply, 'group.html', req)
   })
 
-  app.get('/api/groups/:jid', { preHandler: requireApiKeyOrSession }, async (req, reply) => {
+  app.get('/api/groups/:jid', { preHandler: [requireApiKeyOrSession, requireScope('read')] }, async (req, reply) => {
     if (!isAccountDbReady()) {
       return reply.status(503).send({ error: 'Not connected' })
     }
@@ -187,7 +189,7 @@ export function registerRoutes(app: FastifyInstance) {
     return await sendPage(reply, 'user.html', req)
   })
 
-  app.get('/api/users/:jid', { preHandler: requireApiKeyOrSession }, async (req, reply) => {
+  app.get('/api/users/:jid', { preHandler: [requireApiKeyOrSession, requireScope('read')] }, async (req, reply) => {
     if (!isAccountDbReady()) return reply.status(503).send({ error: 'Not connected' })
     const { jid } = req.params as { jid: string }
     const user = await getUser(jid)

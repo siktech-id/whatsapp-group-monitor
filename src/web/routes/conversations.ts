@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { jidNormalizedUser } from 'baileys'
 import { isAccountDbReady } from '../../db/account.js'
-import { requireApiKeyOrSession } from '../middleware/auth.js'
+import { requireApiKeyOrSession, requireScope } from '../middleware/auth.js'
 import { getAllGroups } from '../../db/queries/groups.js'
 import { getUser } from '../../db/queries/users.js'
 import { getDistinctDmRecipients, getLastOutgoingPerRecipient, getGroupMessages, getOutgoingMessagesByRecipient, getIncomingMessagesBySender, getDistinctDmSenders, getLastIncomingPerSender } from '../../db/queries/conversations.js'
@@ -20,7 +20,7 @@ function isDmId(id: string): boolean {
 export function registerConversationRoutes(app: FastifyInstance) {
   app.get(
     '/api/conversations',
-    { preHandler: requireApiKeyOrSession },
+    { preHandler: [requireApiKeyOrSession, requireScope('read')] },
     async (_req, reply) => {
       if (!isAccountDbReady()) {
         return reply.status(503).send({ error: 'Not connected' })
@@ -130,7 +130,7 @@ export function registerConversationRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string }; Querystring: { limit?: string; before?: string } }>(
     '/api/conversations/:id/messages',
-    { preHandler: requireApiKeyOrSession },
+    { preHandler: [requireApiKeyOrSession, requireScope('read')] },
     async (req, reply) => {
       if (!isAccountDbReady()) {
         return reply.status(503).send({ error: 'Not connected' })

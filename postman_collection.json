@@ -185,9 +185,9 @@
   "variable": [
     {
       "key": "api_key",
-      "value": "dev-key-change-in-production",
+      "value": "",
       "type": "string",
-      "description": "API Key for developer authentication. Default is 'dev-key-change-in-production'. Set via API_KEY environment variable in production."
+      "description": "Per-client API key, created by an admin on the /api-keys dashboard page."
     },
     {
       "key": "csrf_token",
